@@ -277,6 +277,22 @@ class DocumentProcessor:
         except Exception as e:
             print(f"Warning: Could not generate prerequisites for {pdf_file}: {e}")
 
+        # 3. Update subject to document mapping file
+        subject_doc_file = os.path.join(self.pdf_dir, "subject_documents.json")
+        subj_map = {}
+        if os.path.exists(subject_doc_file):
+            try:
+                with open(subject_doc_file, "r", encoding="utf-8") as smf:
+                    subj_map = json.load(smf)
+            except Exception:
+                subj_map = {}
+        subj_map[pdf_file] = (subject or "DSA").strip().upper()
+        try:
+            with open(subject_doc_file, "w", encoding="utf-8") as smf:
+                json.dump(subj_map, smf, indent=2)
+        except Exception as e:
+            print(f"Warning: could not save subject_documents.json: {e}")
+
         notify(100, f"Successfully processed and indexed {pdf_file}")
         return {
             "status": "success",
@@ -582,6 +598,19 @@ class DocumentProcessor:
             with open(tracking_file, "w", encoding="utf-8") as f:
                 json.dump(hashes, f, indent=4)
             print(f"Removed {filename} from tracking file.")
+
+        # 2.1. Update subject mapping file
+        subject_doc_file = os.path.join(self.pdf_dir, "subject_documents.json")
+        if os.path.exists(subject_doc_file):
+            try:
+                with open(subject_doc_file, "r", encoding="utf-8") as smf:
+                    subj_map = json.load(smf)
+                if filename in subj_map:
+                    del subj_map[filename]
+                    with open(subject_doc_file, "w", encoding="utf-8") as smf:
+                        json.dump(subj_map, smf, indent=2)
+            except Exception as e:
+                print(f"Warning: could not update subject_documents.json on delete: {e}")
 
         # 3. Delete extracted images for this document
         safe_name = filename.replace(" ", "_").replace(".", "_")

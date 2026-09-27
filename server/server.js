@@ -222,7 +222,7 @@ async function callPython(endpoint, options = {}) {
   }
 }
 
-async function filesystemDocuments() {
+async function filesystemDocuments(subject = null) {
   const entries = await fs.readdir(uploadDir, { withFileTypes: true })
   let processed = {}
   try {
@@ -230,20 +230,31 @@ async function filesystemDocuments() {
   } catch {
     // The tracking file is optional until the first successful indexing run.
   }
+  let subjectDocs = {}
+  try {
+    subjectDocs = JSON.parse(await fs.readFile(path.join(uploadDir, 'subject_documents.json'), 'utf8'))
+  } catch {}
 
-  return Promise.all(entries
-    .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.pdf'))
-    .map(async entry => {
-      const filePath = path.join(uploadDir, entry.name)
-      const stats = await fs.stat(filePath)
-      return {
-        id: entry.name,
-        name: entry.name,
-        size: stats.size,
-        uploadedAt: stats.mtime.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-        status: processed[entry.name] ? 'Indexed' : 'Uploaded',
-      }
-    }))
+  const files = entries.filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.pdf'))
+  const filtered = subject
+    ? files.filter(entry => {
+        const assigned = subjectDocs[entry.name]
+        return assigned ? assigned.toUpperCase() === subject.toUpperCase() : false
+      })
+    : files
+
+  return Promise.all(filtered.map(async entry => {
+    const filePath = path.join(uploadDir, entry.name)
+    const stats = await fs.stat(filePath)
+    return {
+      id: entry.name,
+      name: entry.name,
+      size: stats.size,
+      subject: subjectDocs[entry.name] || 'DSA',
+      uploadedAt: stats.mtime.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      status: processed[entry.name] ? 'Indexed' : 'Uploaded',
+    }
+  }))
 }
 
 app.get('/health', (_request, response) => {
@@ -631,7 +642,7 @@ app.get('/api/documents', async (request, response) => {
   try {
     const subject = request.query?.subject ? String(request.query.subject).trim() : null
     const filter = subject ? { subject } : {}
-    const documents = mongoReady ? await Document.find(filter).sort({ uploadedAt: -1 }).lean() : await filesystemDocuments()
+    const documents = mongoReady ? await Document.find(filter).sort({ uploadedAt: -1 }).lean() : await filesystemDocuments(subject)
     response.json({ documents: documents.map(document => ({ ...document, id: document.id || document._id?.toString() })) })
   } catch (error) {
     response.status(500).json({ error: error.message })
