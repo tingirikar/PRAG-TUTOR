@@ -126,30 +126,13 @@ export default function StudentDashboard() {
       if (data.questions && Array.isArray(data.questions) && data.questions.length > 0) {
         setSampleQuestions(data.questions)
       } else {
-        setSampleQuestions(getFallbackQuestions(subjectCode))
+        setSampleQuestions([])
       }
     } catch {
-      setSampleQuestions(getFallbackQuestions(subjectCode))
+      setSampleQuestions([])
     } finally {
       setRefreshingQuestions(false)
     }
-  }
-
-  const getFallbackQuestions = (subjectCode) => {
-    if (subjectCode === 'ML') {
-      return [
-        { question: "What is the difference between supervised and unsupervised learning?", topic: "Supervised Learning", level: "beginner" },
-        { question: "Explain how gradient descent minimizes the cost function.", topic: "Optimization", level: "intermediate" },
-        { question: "What is overfitting and how do regularization techniques prevent it?", topic: "Model Evaluation", level: "intermediate" },
-        { question: "How does the backpropagation algorithm work in multi-layer perceptrons?", topic: "Neural Networks", level: "expert" },
-      ]
-    }
-    return [
-      { question: "What is the difference between static and dynamic arrays?", topic: "Arrays", level: "beginner" },
-      { question: "Explain the concept of time complexity in algorithms.", topic: "Complexity", level: "intermediate" },
-      { question: "How does a binary search tree maintain its search invariant?", topic: "Binary Search Tree", level: "intermediate" },
-      { question: "What is the purpose of Dijkstra's shortest path algorithm?", topic: "Graphs", level: "expert" },
-    ]
   }
 
   // Load conversations for a subject
@@ -651,7 +634,7 @@ export default function StudentDashboard() {
                   I'll explain concepts at your chosen level.
                 </p>
 
-                {(sampleQuestions.length > 0 || refreshingQuestions) && (
+                {refreshingQuestions || sampleQuestions.length > 0 ? (
                   <div className="sample-questions-container">
                     <div className="sample-questions-heading">
                       <span className="sample-questions-title">
@@ -694,6 +677,15 @@ export default function StudentDashboard() {
                           ))
                       }
                     </div>
+                  </div>
+                ) : (
+                  <div className="no-sources-empty-state">
+                    <div className="no-sources-icon">📂</div>
+                    <h4>No Course Materials Added Yet</h4>
+                    <p>
+                      No source files or syllabus documents have been uploaded for <strong>{selectedSubject.name}</strong> yet.
+                      Questions and grounded tutoring will appear once faculty adds course files.
+                    </p>
                   </div>
                 )}
               </div>

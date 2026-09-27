@@ -452,7 +452,8 @@ app.post('/api/query/images', async (request, response) => {
 app.get('/api/sample-questions', async (request, response) => {
   try {
     const seed = request.query.seed || randomUUID()
-    const result = await callPython(`/rag/sample-questions?seed=${encodeURIComponent(seed)}`, {
+    const subject = request.query.subject || ''
+    const result = await callPython(`/rag/sample-questions?seed=${encodeURIComponent(seed)}&subject=${encodeURIComponent(subject)}`, {
       timeout: 60000, // 1 minute timeout for sample questions
     })
     response.json(result)

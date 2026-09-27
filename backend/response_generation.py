@@ -529,21 +529,20 @@ class ResponseGenerator:
             provider=getattr(result, "provider", provider or "groq")
         )
 
-    def generate_sample_questions(self, seed: Optional[str] = None) -> List[Dict[str, str]]:
-        """Generate a fresh set of course questions for the student dashboard.
-
-        Strategy: try Groq first, then fall back to local Ollama.
-        Never return hardcoded placeholders.
+    def generate_sample_questions(self, seed: Optional[str] = None, subject: Optional[str] = None) -> List[Dict[str, str]]:
+        """Generate course questions grounded strictly in uploaded syllabus topics.
+        Never hallucinate questions or return fake fallbacks when no materials exist.
         """
         all_topics = list(self.prerequisites_data.keys())
-        if all_topics:
-            import random
-            rng = random.Random(seed) if seed else random.Random()
-            sample_size = min(12, len(all_topics))
-            selected = rng.sample(all_topics, sample_size)
-            topics = ", ".join(selected)
-        else:
-            topics = "Data Structures, Algorithms, Git, and Deep Learning"
+        if not all_topics:
+            # No course materials uploaded: strictly return empty list. No fake data!
+            return []
+
+        import random
+        rng = random.Random(seed) if seed else random.Random()
+        sample_size = min(12, len(all_topics))
+        selected = rng.sample(all_topics, sample_size)
+        topics = ", ".join(selected)
 
         prompt = (
             "Create exactly six fresh, diverse study questions for an educational tutor dashboard. "

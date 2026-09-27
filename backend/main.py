@@ -187,10 +187,10 @@ def prerequisites() -> Dict[str, Any]:
 
 
 @app.get("/rag/sample-questions")
-def sample_questions(seed: str = Query(default="")) -> Dict[str, Any]:
+def sample_questions(seed: str = Query(default=""), subject: Optional[str] = Query(default=None)) -> Dict[str, Any]:
     if not response_generator:
         raise HTTPException(status_code=503, detail="Response generator is unavailable.")
-    return {"questions": response_generator.generate_sample_questions(seed)}
+    return {"questions": response_generator.generate_sample_questions(seed, subject=subject)}
 
 
 @app.post("/rag/query")
