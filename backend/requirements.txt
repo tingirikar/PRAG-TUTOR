@@ -1,0 +1,11 @@
+pdfplumber
+sentence-transformers
+pinecone
+nltk
+groq
+python-dotenv
+fastapi
+uvicorn[standard]
+PyMuPDF
+Pillow
+requests
