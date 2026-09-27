@@ -328,6 +328,7 @@ class ResponseGenerator:
         conversation_history: Optional[List[Dict[str, str]]] = None,
         preferred_model: Optional[str] = None,
         provider: Optional[str] = None,
+        subject: Optional[str] = "DSA",
     ) -> ResponseResult:
         sentences = []
         for match in matches:
@@ -477,7 +478,8 @@ class ResponseGenerator:
         prerequisites: Optional[List[str]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         preferred_model: Optional[str] = None,
-        provider: Optional[str] = None
+        provider: Optional[str] = None,
+        subject: Optional[str] = "DSA"
     ) -> ResponseResult:
         # Step 1: Retrieve RAG matches
         matches = self.fetch_answer(query_embedding, top_k=5)
@@ -514,7 +516,8 @@ class ResponseGenerator:
             topic=topic,
             conversation_history=conversation_history,
             preferred_model=preferred_model,
-            provider=provider
+            provider=provider,
+            subject=subject
         )
 
         return ResponseResult(

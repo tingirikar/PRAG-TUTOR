@@ -10,21 +10,50 @@ const USERS = {
 
 export default function Login() {
   const [role, setRole] = useState('student')
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState(role === 'student' ? 'student' : 'teacher_dsa')
+  const [password, setPassword] = useState(role === 'student' ? 'student123' : 'dsa123')
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
-  const handleLogin = (e) => {
+  const handleRoleChange = (newRole) => {
+    setRole(newRole)
+    setError('')
+    if (newRole === 'student') {
+      setUsername('student')
+      setPassword('student123')
+    } else {
+      setUsername('teacher_dsa')
+      setPassword('dsa123')
+    }
+  }
+
+  const handleLogin = async (e) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
 
-    const creds = USERS[role]
-    if (username === creds.username && password === creds.password) {
-      sessionStorage.setItem('user', JSON.stringify({ username, role }))
-      navigate(`/${role}`)
-    } else {
-      setError('Invalid credentials. Please try again.')
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password: password.trim() })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to sign in. Please verify your credentials.')
+      }
+
+      sessionStorage.setItem('user', JSON.stringify(data.user))
+      if (data.user.role === 'teacher') {
+        navigate('/teacher')
+      } else {
+        navigate('/student')
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -33,19 +62,19 @@ export default function Login() {
       <div className="login-container">
         <div className="login-header">
           <h1>PRAG Tutor</h1>
-          <p>Intelligent tutoring powered by RAG</p>
+          <p>Intelligent tutoring powered by RAG & Multi-Subject Knowledge</p>
         </div>
 
         <div className="role-tabs">
           <button
             className={`role-tab ${role === 'student' ? 'active' : ''}`}
-            onClick={() => { setRole('student'); setError('') }}
+            onClick={() => handleRoleChange('student')}
           >
             Student
           </button>
           <button
             className={`role-tab ${role === 'teacher' ? 'active' : ''}`}
-            onClick={() => { setRole('teacher'); setError('') }}
+            onClick={() => handleRoleChange('teacher')}
           >
             Teacher
           </button>
@@ -78,14 +107,21 @@ export default function Login() {
             />
           </div>
 
-          <button type="submit" className="btn-primary">
-            Sign In as {role.charAt(0).toUpperCase() + role.slice(1)}
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? 'Signing in...' : `Sign In as ${role.charAt(0).toUpperCase() + role.slice(1)}`}
           </button>
         </form>
 
-        <p className="login-hint">
-          Demo — use <strong>{USERS[role].username}</strong> / <strong>{USERS[role].password}</strong>
-        </p>
+        <div className="login-hint">
+          {role === 'student' ? (
+            <p>Demo Student: <strong>student</strong> / <strong>student123</strong></p>
+          ) : (
+            <div>
+              <p style={{ margin: '3px 0' }}>DSA Faculty: <strong>teacher_dsa</strong> / <strong>dsa123</strong></p>
+              <p style={{ margin: '3px 0' }}>ML Faculty: <strong>teacher_ml</strong> / <strong>ml123</strong></p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

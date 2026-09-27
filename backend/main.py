@@ -50,6 +50,7 @@ app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 
 class QueryRequest(BaseModel):
     query: str = Field(min_length=1)
+    subject: Optional[str] = "DSA"
     level: str = "beginner"
     history: List[Dict[str, str]] = Field(default_factory=list)
     include_image: bool = True
@@ -225,6 +226,7 @@ async def query(request: QueryRequest) -> Dict[str, Any]:
             conversation_history=request.history,
             preferred_model=request.model,
             provider=request.provider,
+            subject=request.subject,
         )
         response_text = getattr(result, "response", str(result))
 
