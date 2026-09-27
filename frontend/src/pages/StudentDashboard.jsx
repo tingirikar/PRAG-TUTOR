@@ -473,7 +473,7 @@ export default function StudentDashboard() {
     }
   }
 
-  const handleAsk = async (queryText, chosenLevel = level) => {
+  const handleAsk = async (queryText, chosenLevel = level, topicHint = null) => {
     const query = queryText.trim()
     if (!query || loading || !selectedSubject) return
 
@@ -517,6 +517,7 @@ export default function StudentDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query,
+          topic: topicHint || undefined,
           subject: selectedSubject.code,
           studentUsername: currentUser.username || 'student',
           conversationId: currentConversationId,
@@ -613,7 +614,7 @@ export default function StudentDashboard() {
 
   const handleSelectSample = (sample) => {
     if (sample.level) setLevel(sample.level)
-    handleAsk(sample.question, sample.level || level)
+    handleAsk(sample.question, sample.level || level, sample.topic)
   }
 
   const logout = () => {

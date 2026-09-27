@@ -32,6 +32,7 @@ app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 
 class QueryRequest(BaseModel):
     query: str = Field(min_length=1)
+    topic: Optional[str] = None
     subject: Optional[str] = "DSA"
     level: str = "beginner"
     history: List[Dict[str, str]] = Field(default_factory=list)
@@ -165,6 +166,7 @@ async def query(request: QueryRequest) -> Dict[str, Any]:
             query_embedding,
             processed["level"],
             user_question=request.query,
+            topic=request.topic,
             conversation_history=request.history,
             preferred_model=request.model,
             provider=request.provider,

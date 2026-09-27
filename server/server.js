@@ -406,6 +406,7 @@ app.post('/api/query', async (request, response) => {
   if (!query) return response.status(400).json({ error: 'Please enter a question.' })
 
   const subject = String(request.body?.subject || 'DSA').trim()
+  const topic = request.body?.topic ? String(request.body.topic).trim() : null
   const studentUsername = String(request.body?.studentUsername || 'student').trim()
   let conversationId = request.body?.conversationId
 
@@ -416,6 +417,7 @@ app.post('/api/query', async (request, response) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query,
+        topic: topic || undefined,
         subject,
         level: request.body?.level || 'beginner',
         model: request.body?.model || 'openai/gpt-oss-20b',
