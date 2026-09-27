@@ -63,6 +63,8 @@ export default function TeacherDashboard() {
       name: f.name,
       size: f.size,
       status: 'pending',   // pending | uploading | done | error
+      progress: 0,
+      stage: 'Ready to upload',
     }))
     setFiles(prev => [...prev, ...newFiles])
   }
@@ -108,45 +110,116 @@ export default function TeacherDashboard() {
     fetchDocuments()
   }, [activeTab, teacherSubject])
 
+  const uploadSingleFile = (fileObj) => {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest()
+      const formData = new FormData()
+      formData.append('file', fileObj.file)
+      formData.append('subject', teacherSubject)
+
+      setFiles(prev => prev.map(x => x.id === fileObj.id ? {
+        ...x,
+        status: 'uploading',
+        progress: 2,
+        stage: 'Transferring PDF to server...'
+      } : x))
+
+      // 1. Monitor network byte transfer (0% - 20% total pipeline)
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && event.total > 0) {
+          const bytePct = Math.round((event.loaded / event.total) * 100)
+          const scaledPct = Math.min(20, Math.max(2, Math.round(bytePct * 0.2)))
+          setFiles(prev => prev.map(x => x.id === fileObj.id ? {
+            ...x,
+            status: 'uploading',
+            progress: scaledPct,
+            stage: `Uploading bytes (${bytePct}%)...`
+          } : x))
+        }
+      }
+
+      // 2. Stream real AI pipeline progress from Express SSE response (20% - 100%)
+      let seenIndex = 0
+      xhr.onprogress = () => {
+        const text = xhr.responseText.slice(seenIndex)
+        seenIndex = xhr.responseText.length
+
+        const lines = text.split('\n')
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(trimmed.slice(6))
+              if (data.error) {
+                setFiles(prev => prev.map(x => x.id === fileObj.id ? {
+                  ...x,
+                  status: 'error',
+                  progress: 0,
+                  stage: data.error
+                } : x))
+              } else if (data.percent !== undefined) {
+                const overallPct = Math.min(100, Math.max(20, Math.round(20 + (data.percent * 0.8))))
+                const isFinished = data.done || overallPct >= 100
+                setFiles(prev => prev.map(x => x.id === fileObj.id ? {
+                  ...x,
+                  status: isFinished ? 'done' : 'uploading',
+                  progress: isFinished ? 100 : overallPct,
+                  stage: data.stage || 'Processing document...'
+                } : x))
+              }
+            } catch {
+              // Ignore partial chunk boundaries
+            }
+          }
+        }
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          setFiles(prev => prev.map(x => x.id === fileObj.id ? {
+            ...x,
+            status: 'done',
+            progress: 100,
+            stage: 'Completed & Indexed'
+          } : x))
+          fetchDocuments()
+          resolve(true)
+        } else {
+          let errorMsg = `Server error (${xhr.status})`
+          try {
+            const errObj = JSON.parse(xhr.responseText)
+            if (errObj.error) errorMsg = errObj.error
+          } catch {}
+          setFiles(prev => prev.map(x => x.id === fileObj.id ? {
+            ...x,
+            status: 'error',
+            stage: errorMsg
+          } : x))
+          resolve(false)
+        }
+      }
+
+      xhr.onerror = () => {
+        setFiles(prev => prev.map(x => x.id === fileObj.id ? {
+          ...x,
+          status: 'error',
+          stage: 'Network transfer failed'
+        } : x))
+        resolve(false)
+      }
+
+      xhr.open('POST', `/api/upload?stream=true&subject=${encodeURIComponent(teacherSubject)}`, true)
+      xhr.setRequestHeader('Accept', 'text/event-stream')
+      xhr.send(formData)
+    })
+  }
+
   const uploadAll = async () => {
     const pendingFiles = files.filter(f => f.status === 'pending')
-    if (pendingFiles.length === 0) return
+    if (pendingFiles.length === 0 || files.some(f => f.status === 'uploading')) return
 
     for (const f of pendingFiles) {
-      setFiles(prev => prev.map(x => x.id === f.id ? { ...x, status: 'uploading' } : x))
-
-      try {
-        const formData = new FormData()
-        formData.append('file', f.file)
-        formData.append('subject', teacherSubject)
-
-        // Add timeout to prevent hanging indefinitely
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 300000) // 5 minute timeout
-
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-          signal: controller.signal,
-        })
-
-        clearTimeout(timeoutId)
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}))
-          throw new Error(errData.error || 'Upload failed')
-        }
-
-        setFiles(prev => prev.map(x => x.id === f.id ? { ...x, status: 'done' } : x))
-        fetchDocuments()
-      } catch (err) {
-        console.error('Upload error:', err)
-        const errorMessage = err.name === 'AbortError' 
-          ? 'Upload timed out (file may be too large or server busy)' 
-          : err.message
-        setFiles(prev => prev.map(x => x.id === f.id ? { ...x, status: 'error' } : x))
-        alert(`Upload failed for ${f.name}: ${errorMessage}`)
-      }
+      await uploadSingleFile(f)
     }
   }
 
@@ -246,29 +319,71 @@ export default function TeacherDashboard() {
                 <div className="file-list">
                   {files.map((f) => (
                     <div key={f.id} className="file-item">
-                      <span className="file-icon"><FileText size={18} /></span>
+                      <span className="file-icon"><FileText size={20} /></span>
                       <div className="file-details">
-                        <div className="file-name">{f.name}</div>
-                        <div className="file-size">{formatSize(f.size)}</div>
+                        <div className="file-name-row">
+                          <span className="file-name" title={f.name}>{f.name}</span>
+                          <span className="file-size">{formatSize(f.size)}</span>
+                        </div>
+
+                        {f.status !== 'pending' && (
+                          <>
+                            <div className="file-progress-track">
+                              <div
+                                className={`file-progress-fill ${f.status}`}
+                                style={{ width: `${f.progress !== undefined ? f.progress : (f.status === 'done' ? 100 : 0)}%` }}
+                              />
+                            </div>
+                            <div className="file-stage-row">
+                              <span className="file-stage-text">
+                                {f.status === 'uploading' && <span className="progress-spinner" />}
+                                {f.stage || (f.status === 'done' ? 'Completed & Indexed' : 'Processing...')}
+                              </span>
+                              <span className="file-percent-text">
+                                {f.progress !== undefined ? f.progress : (f.status === 'done' ? 100 : 0)}%
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <span className={`file-status ${f.status}`}>
-                        {f.status === 'pending' && 'Ready'}
-                        {f.status === 'uploading' && 'Uploading…'}
-                        {f.status === 'done' && <><Check size={13} /> Done</>}
-                        {f.status === 'error' && 'Error'}
-                      </span>
-                      {f.status === 'pending' && (
-                        <button className="file-remove" onClick={(e) => { e.stopPropagation(); removeFile(f.id) }}><X size={15} /></button>
-                      )}
+
+                      <div className="file-actions-right">
+                        <span className={`file-status ${f.status}`}>
+                          {f.status === 'pending' && 'Ready'}
+                          {f.status === 'uploading' && `${f.progress || 0}%`}
+                          {f.status === 'done' && <><Check size={13} /> Indexed</>}
+                          {f.status === 'error' && 'Error'}
+                        </span>
+                        {(f.status === 'pending' || f.status === 'error' || f.status === 'done') && (
+                          <button
+                            className="file-remove"
+                            onClick={(e) => { e.stopPropagation(); removeFile(f.id) }}
+                            title="Remove file"
+                          >
+                            <X size={15} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
 
                 <div className="upload-actions">
-                  <button className="btn-accent" onClick={uploadAll}>
-                    Upload All to {teacherSubject} ({files.filter(f => f.status === 'pending').length})
+                  <button
+                    className="btn-accent"
+                    onClick={uploadAll}
+                    disabled={files.some(f => f.status === 'uploading') || files.filter(f => f.status === 'pending').length === 0}
+                    style={{
+                      opacity: (files.some(f => f.status === 'uploading') || files.filter(f => f.status === 'pending').length === 0) ? 0.6 : 1,
+                      cursor: (files.some(f => f.status === 'uploading') || files.filter(f => f.status === 'pending').length === 0) ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {files.some(f => f.status === 'uploading')
+                      ? 'Indexing in progress...'
+                      : `Upload All to ${teacherSubject} (${files.filter(f => f.status === 'pending').length})`
+                    }
                   </button>
-                  {files.some(f => f.status === 'done') && (
+                  {files.some(f => f.status === 'done') && !files.some(f => f.status === 'uploading') && (
                     <button className="btn-secondary" onClick={clearDone}>Clear Done</button>
                   )}
                 </div>

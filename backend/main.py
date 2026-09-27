@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 # pyrefly: ignore [missing-import]
@@ -290,6 +291,67 @@ def index_documents(request: IndexRequest = IndexRequest()) -> Dict[str, Any]:
         }
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Failed to index documents: {error}") from error
+
+
+@app.post("/rag/index/stream")
+def index_documents_stream(request: IndexRequest = IndexRequest()):
+    if not document_processor:
+        raise HTTPException(status_code=503, detail="Document processor is unavailable.")
+
+    def event_stream():
+        import queue
+        import threading
+        import json
+
+        q = queue.Queue()
+
+        def notify(pct, stage):
+            q.put({"percent": pct, "stage": stage})
+
+        def worker():
+            try:
+                if request.filenames:
+                    total_files = len(request.filenames)
+                    for f_idx, filename in enumerate(request.filenames):
+                        filepath = os.path.join(UPLOAD_DIR, filename)
+                        if os.path.exists(filepath):
+                            file_base_pct = int((f_idx / total_files) * 100)
+                            file_weight = 1.0 / total_files
+
+                            def file_progress(pct, msg):
+                                overall_pct = int(file_base_pct + (pct * file_weight))
+                                stage_label = msg if total_files == 1 else f"[{filename}] {msg}"
+                                notify(min(overall_pct, 98), stage_label)
+
+                            document_processor.process_single_pdf(
+                                filepath,
+                                subject=request.subject,
+                                progress_callback=file_progress,
+                            )
+                else:
+                    notify(50, "Indexing all documents in vector database...")
+                    document_processor.upload_to_vector_db()
+
+                if response_generator:
+                    notify(95, "Reloading prerequisite syllabus graph...")
+                    response_generator.reload_prerequisites()
+
+                notify(100, "Documents indexed successfully.")
+                q.put(None)
+            except Exception as e:
+                q.put({"error": str(e), "percent": -1})
+                q.put(None)
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            yield f"data: {json.dumps(item)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/rag/delete")

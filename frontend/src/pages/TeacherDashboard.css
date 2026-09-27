@@ -163,36 +163,147 @@
 .file-item {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
-  padding: 12px 14px;
+  gap: 1rem;
+  padding: 14px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  margin-bottom: 0.6rem;
-  box-shadow: none;
+  border-radius: var(--radius-lg, 12px);
+  margin-bottom: 0.75rem;
+  box-shadow: 0 4px 14px rgba(16, 17, 20, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.file-icon { font-size: 1.3rem; }
+.file-item:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 6px 20px rgba(16, 17, 20, 0.06);
+}
 
-.file-details { flex: 1; }
+.file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.file-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 
 .file-name {
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-size {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--text-dim);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.file-progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--surface-3, #e5e7eb);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 7px 0 5px 0;
+}
+
+.file-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2547ff, #6366f1);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.file-progress-fill.uploading {
+  background: linear-gradient(90deg, #2547ff, #06b6d4);
+  box-shadow: 0 0 10px rgba(37, 71, 255, 0.35);
+}
+
+.file-progress-fill.done {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.file-progress-fill.error {
+  background: var(--red);
+}
+
+.file-stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.74rem;
   margin-top: 2px;
+}
+
+.file-stage-text {
+  color: var(--text-dim);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.file-percent-text {
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.progress-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(37, 71, 255, 0.25);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spinProgress 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spinProgress {
+  to { transform: rotate(360deg); }
+}
+
+.file-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .file-status {
   font-size: 0.75rem;
-  padding: 0.25rem 0.65rem;
+  padding: 0.3rem 0.7rem;
   border-radius: 20px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .file-status.pending {
@@ -201,8 +312,9 @@
 }
 
 .file-status.uploading {
-  background: var(--amber-bg);
-  color: var(--amber);
+  background: var(--accent-light);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .file-status.done {
@@ -219,8 +331,11 @@
   background: transparent;
   color: var(--text-dim);
   font-size: 1.1rem;
-  padding: 0.35rem;
+  padding: 0.4rem;
   border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s ease;
 }
 

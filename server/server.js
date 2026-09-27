@@ -531,6 +531,77 @@ app.post('/api/upload', upload.fields([{ name: 'file', maxCount: 20 }, { name: '
   if (!files.length) return response.status(400).json({ error: 'No PDF file uploaded.' })
   const subject = String(request.body?.subject || request.query?.subject || 'DSA').trim()
 
+  const wantsStream = request.headers.accept?.includes('text/event-stream') || request.query?.stream === 'true'
+
+  if (wantsStream) {
+    response.setHeader('Content-Type', 'text/event-stream')
+    response.setHeader('Cache-Control', 'no-cache')
+    response.setHeader('Connection', 'keep-alive')
+    if (typeof response.flushHeaders === 'function') response.flushHeaders()
+
+    const sendEvent = (data) => {
+      response.write(`data: ${JSON.stringify(data)}\n\n`)
+    }
+
+    sendEvent({ percent: 5, stage: 'File received. Registering in database...' })
+
+    try {
+      if (mongoReady) {
+        await Promise.all(files.map(file => Document.findOneAndUpdate(
+          { name: file.filename },
+          { name: file.filename, size: file.size, subject, uploadedAt: new Date(), status: 'Uploaded' },
+          { upsert: true, new: true },
+        )))
+      }
+
+      sendEvent({ percent: 10, stage: 'Connected to AI processing engine...' })
+      const filenames = files.map(file => file.filename)
+
+      const pyRes = await fetch(`${pythonUrl}/rag/index/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filenames, subject }),
+      })
+
+      if (!pyRes.ok) {
+        const errText = await pyRes.text().catch(() => '')
+        throw new Error(`Python indexing service error (${pyRes.status}): ${errText}`)
+      }
+
+      const reader = pyRes.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(trimmed.slice(6))
+              sendEvent(parsed)
+            } catch {
+              // ignore partial json
+            }
+          }
+        }
+      }
+
+      if (mongoReady) await Document.updateMany({ name: { $in: filenames } }, { status: 'Indexed' })
+      sendEvent({ percent: 100, stage: 'Completed & Indexed', done: true, files: filenames, subject })
+      response.end()
+    } catch (error) {
+      sendEvent({ error: error.message, percent: -1 })
+      response.end()
+    }
+    return
+  }
+
   try {
     if (mongoReady) {
       await Promise.all(files.map(file => Document.findOneAndUpdate(

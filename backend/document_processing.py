@@ -150,7 +150,7 @@ class DocumentProcessor:
         embeddings = self.model.encode(texts)
         return chunk_data, embeddings
 
-    def process_single_pdf(self, filepath, subject="DSA"):
+    def process_single_pdf(self, filepath, subject="DSA", progress_callback=None):
         """
         Processes an individual PDF document:
         1. Extracts embedded images for multi-modal support.
@@ -158,10 +158,18 @@ class DocumentProcessor:
         3. Automatically extracts topics and generates prerequisite JSON into prerequisites/.
         4. Updates the tracking file.
         """
+        def notify(pct, msg):
+            if progress_callback:
+                try:
+                    progress_callback(pct, msg)
+                except Exception:
+                    pass
+
         if not os.path.exists(filepath):
             return {"status": "error", "message": f"File not found: {filepath}"}
 
         pdf_file = os.path.basename(filepath)
+        notify(5, f"Validating document integrity: {pdf_file}")
         tracking_file = os.path.join(self.pdf_dir, "processed_files.json")
         processed_hashes = {}
         if os.path.exists(tracking_file):
@@ -181,12 +189,16 @@ class DocumentProcessor:
             return {"status": "error", "message": f"Could not hash file: {e}"}
 
         # Multi-modal image extraction
+        notify(15, f"Extracting diagrams & images from {pdf_file}...")
         self.extract_images_from_pdf(filepath, pdf_file)
 
         # Upsert vectors to Pinecone isolated strictly to the subject namespace (DSA vs ML)
         if self.index is not None and processed_hashes.get(pdf_file) != file_hash:
+            notify(30, "Reading pages & extracting text content...")
             pages = self.read_pdf_by_page(filepath)
+            notify(45, f"Chunking text & computing embeddings for {len(pages)} pages...")
             chunk_data, embeddings = self.generate_embeddings_with_pages(pages)
+            notify(60, f"Upserting {len(embeddings)} vectors into Pinecone ({subject})...")
             vectors_to_upsert = []
             for i, embedding in enumerate(embeddings):
                 vector = embedding.tolist()
@@ -219,10 +231,12 @@ class DocumentProcessor:
         # Automatically generate prerequisite JSON
         prereq_res = {}
         try:
+            notify(75, "Analyzing topics & building prerequisite graph with AI...")
             prereq_res = self.prereq_generator.generate_for_document(filepath)
         except Exception as e:
             print(f"Warning: Could not generate prerequisites for {pdf_file}: {e}")
 
+        notify(100, f"Successfully processed and indexed {pdf_file}")
         return {
             "status": "success",
             "file": pdf_file,
