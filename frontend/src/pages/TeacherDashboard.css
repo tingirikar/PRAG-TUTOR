@@ -377,3 +377,138 @@
   .doc-table { min-width: 650px; }
   .doc-table-card { overflow-x: auto; }
 }
+
+/* Visual redesign: existing teacher workflow and controls are unchanged. */
+.dashboard {
+  background: linear-gradient(135deg, #f8f9fc 0%, var(--bg) 100%);
+}
+
+.sidebar {
+  width: 232px;
+  padding: 26px 16px;
+  border-right: 0;
+  background: #111827;
+  box-shadow: 8px 0 30px rgba(17, 24, 39, 0.08);
+}
+
+.sidebar-brand span {
+  color: #fff;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+}
+
+.brand-icon {
+  border-radius: 9px;
+  background: linear-gradient(135deg, #796ff0, #5b50d2);
+}
+
+.nav-item {
+  color: #9ca7b8;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.nav-item.active {
+  background: rgba(121, 111, 240, 0.22);
+  color: #fff;
+}
+
+.sidebar-footer {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-name {
+  color: #fff;
+}
+
+.user-role {
+  color: #8f9bad;
+}
+
+.main-content {
+  margin-left: 232px;
+  padding: 44px 54px;
+}
+
+.page-header h2 {
+  font-size: 1.9rem;
+}
+
+.upload-zone {
+  border: 1.5px dashed #b8c2d2;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  box-shadow: 0 12px 30px rgba(97, 87, 217, 0.08);
+}
+
+.file-item {
+  border-radius: 12px;
+  box-shadow: 0 5px 18px rgba(35, 45, 70, 0.04);
+}
+
+.btn-accent {
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6c61e7, #5047c7);
+  box-shadow: 0 8px 18px rgba(97, 87, 217, 0.18);
+}
+
+.btn-accent:hover {
+  background: linear-gradient(135deg, #6257db, #463db8);
+}
+
+.doc-table-card,
+.empty-state {
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(35, 45, 70, 0.05);
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    width: 100%;
+    background: #111827;
+  }
+
+  .main-content {
+    margin-left: 0;
+    padding: 28px 18px;
+  }
+}
+
+/* ============================================================
+   CONSISTENCY PASS — same ink + cobalt system as Login and the
+   student dashboard, plus consistent tactile button motion.
+   ============================================================ */
+.sidebar {
+  background: var(--ink);
+  box-shadow: 8px 0 30px rgba(16, 17, 20, 0.12);
+}
+.brand-icon,
+.user-avatar { background: var(--accent); }
+.nav-item.active { background: rgba(37, 71, 255, 0.18); color: #fff; }
+
+.btn-accent {
+  background: var(--accent);
+  box-shadow: 0 8px 18px var(--accent-glow);
+}
+.btn-accent:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 12px 30px var(--accent-glow);
+}
+
+.dashboard button {
+  transition: transform 0.12s ease, background 0.16s ease,
+    box-shadow 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.dashboard button:active { transform: translateY(1px) scale(0.99); }

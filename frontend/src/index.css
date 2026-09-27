@@ -1,59 +1,117 @@
-/* ===== Simple shared styles ===== */
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');
+
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: 15px;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    margin-top: 0;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  button {
+    border: 0;
+    cursor: pointer;
+  }
+
+  input,
+  textarea,
+  select {
+    outline: none;
+  }
+
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
 }
 
 :root {
-  --bg: #f5f2eb;
+  --ink: #101114;
+  --bg: #eef0f2;
   --surface: #ffffff;
-  --surface-2: #f0ede6;
-  --surface-3: #e5e0d6;
-  --border: #ddd7cb;
-  --border-strong: #c9c0b2;
-  --text: #25231f;
-  --text-dim: #716b62;
-  --text-muted: #9d968b;
-  --accent: #b44f35;
-  --accent-hover: #913e29;
-  --accent-light: #f8e9e3;
-  --accent-glow: rgba(180, 79, 53, 0.15);
-  --green: #397253;
-  --green-bg: #e9f1eb;
-  --red: #b23b35;
-  --red-bg: #f9e8e5;
-  --amber: #9b681f;
-  --amber-bg: #faf0d9;
-  --shadow-sm: 0 1px 2px rgba(45, 37, 28, 0.06);
-  --shadow: 0 8px 24px rgba(45, 37, 28, 0.07);
-  --radius: 6px;
-  --radius-lg: 10px;
+  --surface-2: #f4f5f7;
+  --surface-3: #e8eaee;
+  --border: #e0e3e8;
+  --border-strong: #ccd0d7;
+  --text: #101114;
+  --text-dim: #565b64;
+  --text-muted: #888e99;
+  --accent: #2547ff;
+  --accent-hover: #1a35d6;
+  --accent-light: #e6eaff;
+  --accent-glow: rgba(37, 71, 255, 0.18);
+  --green: #0a7a5f;
+  --green-bg: #e6f6f0;
+  --red: #cc2e46;
+  --red-bg: #fdeef0;
+  --amber: #9a5b00;
+  --amber-bg: #fdf3df;
+  --shadow-sm: 0 1px 2px rgba(16, 17, 20, 0.06);
+  --shadow: 0 18px 44px rgba(16, 20, 34, 0.1);
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --radius: 7px;
+  --radius-lg: 12px;
 }
 
-html { font-size: 15px; }
-
-body {
-  font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
+::selection {
+  background: #c8d2ff;
+  color: #0d1c66;
 }
 
-h1, h2, h3 {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-weight: 600;
-  letter-spacing: 0;
+::-webkit-scrollbar {
+  width: 7px;
 }
 
-a { color: var(--accent); text-decoration: none; }
-button { cursor: pointer; font-family: inherit; border: none; outline: none; }
-input, textarea, select { font-family: inherit; outline: none; border: none; }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background: #c3c8d0;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--accent-glow);
+  outline-offset: 2px;
+}

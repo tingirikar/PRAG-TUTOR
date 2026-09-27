@@ -6,7 +6,20 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
+import {
+  LayoutGrid, LogOut, GraduationCap, User, ArrowRight, ArrowLeft, Zap, Database,
+  Cpu, Globe, SquarePen, Check, X, MessageSquare, Trash2, BookOpen, RefreshCw,
+  FolderOpen, Link2, Target, FileText, Files, Network, Brain, Binary,
+  ChevronUp, ChevronDown, CircleDot, Circle, Images,
+} from 'lucide-react'
 import './StudentDashboard.css'
+
+// Real vector icon per subject (replaces stored emoji)
+function SubjectIcon({ code, size = 22 }) {
+  if (code === 'ML') return <Brain size={size} strokeWidth={1.75} />
+  if (code === 'DSA') return <Binary size={size} strokeWidth={1.75} />
+  return <BookOpen size={size} strokeWidth={1.75} />
+}
 
 mermaid.initialize({
   startOnLoad: false,
@@ -59,7 +72,7 @@ function MermaidBlock({ code }) {
     return (
       <div className="mermaid-fallback-box">
         <div className="mermaid-header">
-          <span className="mermaid-badge">📊 Mermaid Diagram (Syntax Preview)</span>
+          <span className="mermaid-badge"><Network size={14} /> Mermaid Diagram (Syntax Preview)</span>
         </div>
         <pre className="mermaid-code-pre"><code>{code}</code></pre>
       </div>
@@ -78,7 +91,7 @@ function MermaidBlock({ code }) {
   return (
     <div className="mermaid-container-card">
       <div className="mermaid-header">
-        <span className="mermaid-badge">📊 Interactive Mermaid Diagram</span>
+        <span className="mermaid-badge"><Network size={14} /> Interactive Mermaid Diagram</span>
       </div>
       <div
         className="mermaid-rendered-svg"
@@ -124,6 +137,109 @@ function formatContent(content) {
   )
 }
 
+function DropupSelect({
+  value,
+  label,
+  onChange,
+  disabled = false,
+  ariaLabel,
+  options = [],
+  align = 'left',
+  minWidth = 160,
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  const handleSelect = (val) => {
+    onChange(val)
+    setOpen(false)
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={`dropup-container ${open ? 'open' : ''}`}
+    >
+      <button
+        type="button"
+        className={`dropup-trigger ${open ? 'active' : ''}`}
+        onClick={() => !disabled && setOpen((prev) => !prev)}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        <span className="dropup-trigger-label">{label}</span>
+        <ChevronUp size={13} className={`dropup-arrow ${open ? 'rotate' : ''}`} />
+      </button>
+
+      {open && (
+        <div
+          className={`dropup-menu dropup-align-${align}`}
+          role="listbox"
+          style={{ minWidth }}
+        >
+          {options.map((item, idx) => {
+            if (item.group) {
+              return (
+                <div key={`group-${idx}`} className="dropup-group">
+                  <div className="dropup-group-title">{item.group}</div>
+                  {item.items.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="option"
+                      aria-selected={value === opt.value}
+                      disabled={opt.disabled}
+                      className={`dropup-item ${value === opt.value ? 'selected' : ''} ${opt.disabled ? 'disabled' : ''}`}
+                      onClick={() => !opt.disabled && handleSelect(opt.value)}
+                    >
+                      <span className="dropup-item-text">{opt.label}</span>
+                      {value === opt.value && <Check size={14} className="dropup-check" />}
+                    </button>
+                  ))}
+                </div>
+              )
+            }
+            return (
+              <button
+                key={item.value}
+                type="button"
+                role="option"
+                aria-selected={value === item.value}
+                disabled={item.disabled}
+                className={`dropup-item ${value === item.value ? 'selected' : ''} ${item.disabled ? 'disabled' : ''}`}
+                onClick={() => !item.disabled && handleSelect(item.value)}
+              >
+                <span className="dropup-item-text">{item.label}</span>
+                {value === item.value && <Check size={14} className="dropup-check" />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function StudentDashboard() {
   const navigate = useNavigate()
   const messagesEndRef = useRef(null)
@@ -146,7 +262,6 @@ export default function StudentDashboard() {
       code: 'DSA',
       name: 'Data Structures & Algorithms',
       description: 'Master linear & non-linear structures, recursion, trees, graphs, sorting, and complexity analysis.',
-      icon: '📘',
       teacherUsername: 'teacher_dsa',
       teacherName: 'Dr. Sarah (DSA Faculty)'
     },
@@ -154,7 +269,6 @@ export default function StudentDashboard() {
       code: 'ML',
       name: 'Machine Learning',
       description: 'Explore supervised & unsupervised learning, cost functions, gradient descent, neural networks, and evaluation.',
-      icon: '🤖',
       teacherUsername: 'teacher_ml',
       teacherName: 'Prof. Alan (ML Faculty)'
     }
@@ -344,8 +458,9 @@ export default function StudentDashboard() {
     }))
   }
 
-  const handleModelChange = (e) => {
-    const val = e.target.value
+  const handleModelChange = (eOrVal) => {
+    const val = typeof eOrVal === 'string' ? eOrVal : eOrVal?.target?.value
+    if (!val) return
     if (val === 'custom_local') {
       setIsCustomModel(true)
       setProvider('local')
@@ -514,14 +629,14 @@ export default function StudentDashboard() {
       <div className="dashboard subject-hub-dashboard">
         <aside className="sidebar">
           <div className="sidebar-brand">
-            <div className="brand-icon">L</div>
+            <div className="brand-icon">PT</div>
             <span>PRAG Tutor</span>
           </div>
 
           <nav className="sidebar-nav">
             <div className="sidebar-section-title">Navigation</div>
             <button className="nav-item active">
-              <span className="nav-icon">📚</span>
+              <span className="nav-icon"><LayoutGrid size={18} /></span>
               <span>Subject Hub</span>
             </button>
           </nav>
@@ -535,7 +650,7 @@ export default function StudentDashboard() {
               </div>
             </div>
             <button className="btn-logout" onClick={logout}>
-              <span className="nav-icon">🚪</span>
+              <span className="nav-icon"><LogOut size={17} /></span>
               <span>Sign Out</span>
             </button>
           </div>
@@ -544,7 +659,7 @@ export default function StudentDashboard() {
         <main className="main-content hub-content">
           <div className="hub-container">
             <div className="hub-header">
-              <div className="hub-welcome-badge">🎓 Student Dashboard</div>
+              <div className="hub-welcome-badge"><GraduationCap size={15} /> Student Dashboard</div>
               <h1>Welcome back, {currentUser.name || 'Student'}</h1>
               <p>Select your course subject below to start personalized AI tutoring grounded in your syllabus.</p>
             </div>
@@ -557,18 +672,18 @@ export default function StudentDashboard() {
                   onClick={() => selectSubject(subj)}
                 >
                   <div className="subject-card-top">
-                    <span className="subject-card-icon">{subj.icon || '📘'}</span>
+                    <span className="subject-card-icon"><SubjectIcon code={subj.code} size={24} /></span>
                     <span className="subject-code-badge">{subj.code}</span>
                   </div>
                   <h3>{subj.name}</h3>
                   <p className="subject-card-desc">{subj.description}</p>
                   <div className="subject-card-meta">
                     <span className="subject-teacher-info">
-                      👤 Faculty: <strong>{subj.teacherName || subj.teacherUsername}</strong>
+                      <User size={14} /> Faculty: <strong>{subj.teacherName || subj.teacherUsername}</strong>
                     </span>
                   </div>
                   <button className="btn-enter-subject">
-                    Launch {subj.code} Tutor →
+                    Launch {subj.code} Tutor <ArrowRight size={16} />
                   </button>
                 </div>
               ))}
@@ -576,21 +691,21 @@ export default function StudentDashboard() {
 
             <div className="hub-features-row">
               <div className="hub-feature-item">
-                <span className="hub-feature-icon">⚡</span>
+                <span className="hub-feature-icon"><Zap size={20} /></span>
                 <div>
                   <strong>Retrieval Augmented Generation</strong>
                   <p>Fact-checked against verified course texts without hallucinating.</p>
                 </div>
               </div>
               <div className="hub-feature-item">
-                <span className="hub-feature-icon">💾</span>
+                <span className="hub-feature-icon"><Database size={20} /></span>
                 <div>
                   <strong>Persistent Saved Chats</strong>
                   <p>Every session is stored in MongoDB so you can resume anytime.</p>
                 </div>
               </div>
               <div className="hub-feature-item">
-                <span className="hub-feature-icon">💻</span>
+                <span className="hub-feature-icon"><Cpu size={20} /></span>
                 <div>
                   <strong>Local & Cloud Models</strong>
                   <p>Choose ultra-fast Groq cloud LLMs or offline local Ollama models.</p>
@@ -603,6 +718,64 @@ export default function StudentDashboard() {
     )
   }
 
+  // Dropup options and formatted display labels
+  const levelOptions = [
+    { value: 'beginner', label: 'Beginner' },
+    { value: 'intermediate', label: 'Intermediate' },
+    { value: 'expert', label: 'Expert' },
+  ]
+  const currentLevelLabel = levelOptions.find(o => o.value === level)?.label || 'Beginner'
+
+  const modelOptions = [
+    {
+      group: 'Online / Cloud (Groq)',
+      items: cloudModels.map(m => ({
+        value: `groq:${m.id}`,
+        label: m.name || m.id,
+      })),
+    },
+    ollamaOnline ? {
+      group: 'Local (Ollama - Online)',
+      items: [
+        ...localModels.map(m => ({
+          value: `local:${m.id}`,
+          label: `${m.name || m.id} (Local)`,
+        })),
+        { value: 'custom_local', label: '+ Enter custom local model...' },
+      ],
+    } : {
+      group: 'Local (Ollama - Not Running)',
+      items: [
+        { value: 'offline', label: "Ollama offline (Start with 'ollama serve')", disabled: true },
+      ],
+    },
+  ]
+
+  let currentModelLabel = 'Select Model'
+  if (isCustomModel) {
+    currentModelLabel = customModelInput ? `Custom: ${customModelInput}` : '+ Enter custom local model...'
+  } else {
+    const currentVal = `${provider}:${model}`
+    const cloudMatch = cloudModels.find(m => `groq:${m.id}` === currentVal)
+    if (cloudMatch) {
+      currentModelLabel = cloudMatch.name || cloudMatch.id
+    } else {
+      const localMatch = localModels.find(m => `local:${m.id}` === currentVal)
+      if (localMatch) {
+        currentModelLabel = `${localMatch.name || localMatch.id} (Local)`
+      } else if (model) {
+        currentModelLabel = model
+      }
+    }
+  }
+
+  const diagramOptions = [
+    { value: 'none', label: 'No diagrams' },
+    { value: 'notes', label: 'Notes diagrams (PDF)' },
+    { value: 'mermaid', label: 'Mermaid diagrams (Interactive)' },
+  ]
+  const currentDiagramLabel = diagramOptions.find(o => o.value === imageMode)?.label || 'Diagrams'
+
   // ==========================================
   // VIEW 2: TUTOR CHAT WORKSPACE (SCOPED TO SUBJECT)
   // ==========================================
@@ -612,12 +785,12 @@ export default function StudentDashboard() {
       <aside className="sidebar chat-sidebar">
         <div className="sidebar-top">
           <button className="btn-back-hub" onClick={backToSubjects}>
-            <span>←</span>
+            <ArrowLeft size={16} />
             <span>All Subjects</span>
           </button>
-          
+
           <div className="current-subject-header">
-            <span className="subject-icon-small">{selectedSubject.icon}</span>
+            <span className="subject-icon-small"><SubjectIcon code={selectedSubject.code} size={18} /></span>
             <div className="subject-header-text">
               <strong>{selectedSubject.code}</strong>
               <small>{selectedSubject.name}</small>
@@ -625,7 +798,7 @@ export default function StudentDashboard() {
           </div>
 
           <button className="btn-new-chat-chatgpt" onClick={startNewChat}>
-            <span className="btn-icon">✨</span>
+            <span className="btn-icon"><SquarePen size={16} /></span>
             <span>New Chat</span>
           </button>
         </div>
@@ -656,7 +829,7 @@ export default function StudentDashboard() {
                           onClick={(e) => confirmDelete(conv._id, e)}
                           title="Confirm Delete"
                         >
-                          ✓
+                          <Check size={14} />
                         </button>
                         <button
                           type="button"
@@ -664,13 +837,13 @@ export default function StudentDashboard() {
                           onClick={cancelDelete}
                           title="Cancel"
                         >
-                          ✕
+                          <X size={14} />
                         </button>
                       </div>
                     </div>
                   ) : (
                     <>
-                      <span className="chat-item-icon">💬</span>
+                      <span className="chat-item-icon"><MessageSquare size={15} /></span>
                       <span className="chat-item-title" title={conv.title}>{conv.title}</span>
                       <button
                         type="button"
@@ -681,7 +854,7 @@ export default function StudentDashboard() {
                         }}
                         title="Delete Chat"
                       >
-                        🗑️
+                        <Trash2 size={14} />
                       </button>
                     </>
                   )}
@@ -700,7 +873,7 @@ export default function StudentDashboard() {
             </div>
           </div>
           <button className="btn-logout" onClick={logout}>
-            <span className="nav-icon">🚪</span>
+            <span className="nav-icon"><LogOut size={17} /></span>
             <span>Sign Out</span>
           </button>
         </div>
@@ -709,30 +882,12 @@ export default function StudentDashboard() {
       {/* Main Chat Workspace */}
       <main className="main-content">
         <div className="chat-container">
-          
-          {/* Top Status Header */}
-          <div className="chat-top-header">
-            <div className="chat-top-left">
-              <button className="btn-back-pill" onClick={backToSubjects}>
-                ← Switch Subject
-              </button>
-              <div className="chat-status-badge">
-                <div className="status-dot"></div>
-                <span>{selectedSubject.name} &bull; Syllabus Grounded</span>
-              </div>
-            </div>
-            {messages.length > 0 && (
-              <button className="btn-chat-reset" onClick={startNewChat}>
-                ✨ New Chat
-              </button>
-            )}
-          </div>
 
           {/* Messages Feed */}
           <div className="chat-messages">
             {messages.length === 0 && !loading && (
               <div className="welcome-message">
-                <div className="welcome-icon">📚</div>
+                <div className="welcome-icon"><BookOpen size={30} /></div>
                 <h3>Welcome to {selectedSubject.name} Tutor</h3>
                 <p>
                   Ask any question related to {selectedSubject.code} course materials.
@@ -751,7 +906,7 @@ export default function StudentDashboard() {
                         onClick={() => fetchSampleQuestions(selectedSubject.code)}
                         disabled={refreshingQuestions}
                       >
-                        {refreshingQuestions ? 'Refreshing...' : '🔄 Refresh Questions'}
+                        {refreshingQuestions ? 'Refreshing...' : <><RefreshCw size={13} /> Refresh Questions</>}
                       </button>
                     </div>
 
@@ -785,7 +940,7 @@ export default function StudentDashboard() {
                   </div>
                 ) : (
                   <div className="no-sources-empty-state">
-                    <div className="no-sources-icon">📂</div>
+                    <div className="no-sources-icon"><FolderOpen size={28} /></div>
                     <h4>No Course Materials Added Yet</h4>
                     <p>
                       No source files or syllabus documents have been uploaded for <strong>{selectedSubject.name}</strong> yet.
@@ -803,27 +958,27 @@ export default function StudentDashboard() {
                     <div className="msg-badges">
                       {msg.topic && (
                         <span className="badge-chip badge-topic">
-                          <span className="badge-icon">📖</span>
+                          <span className="badge-icon"><BookOpen size={13} /></span>
                           <span className="badge-label">Topic:</span>
                           <strong>{msg.topic}</strong>
                         </span>
                       )}
                       {msg.prerequisites && msg.prerequisites.length > 0 && (
                         <span className="badge-chip badge-prereq">
-                          <span className="badge-icon">🔗</span>
+                          <span className="badge-icon"><Link2 size={13} /></span>
                           <span className="badge-label">Prerequisites:</span>
                           <strong>{msg.prerequisites.join(', ')}</strong>
                         </span>
                       )}
                       {msg.level && (
                         <span className="badge-chip badge-level">
-                          <span className="badge-icon">🎯</span>
+                          <span className="badge-icon"><Target size={13} /></span>
                           <strong>{msg.level}</strong>
                         </span>
                       )}
                       {msg.model && (
                         <span className={`badge-chip ${msg.provider === 'local' ? 'badge-local' : 'badge-cloud'}`}>
-                          <span className="badge-icon">{msg.provider === 'local' ? '💻' : '🌐'}</span>
+                          <span className="badge-icon">{msg.provider === 'local' ? <Cpu size={13} /> : <Globe size={13} />}</span>
                           <span className="badge-label">{msg.provider === 'local' ? 'Local Ollama:' : 'Cloud Groq:'}</span>
                           <strong>{msg.model}</strong>
                         </span>
@@ -840,7 +995,7 @@ export default function StudentDashboard() {
                     {msg.images && msg.images.length > 0 && (
                       <div className="image-gallery-section">
                         <div className="image-gallery-label">
-                          <span>📊 Relevant Diagrams ({msg.images.length})</span>
+                          <span><Images size={15} /> Relevant Diagrams ({msg.images.length})</span>
                         </div>
                         <div className="image-gallery">
                           {msg.images.map((img, imgIdx) => (
@@ -856,7 +1011,7 @@ export default function StudentDashboard() {
                                 loading="lazy"
                               />
                               <div className="image-source-badge document">
-                                <span>📄 {img.document} (p. {img.page + 1})</span>
+                                <span><FileText size={12} /> {img.document} (p. {img.page + 1})</span>
                               </div>
                             </div>
                           ))}
@@ -880,10 +1035,10 @@ export default function StudentDashboard() {
                       onClick={() => toggleSources(i)}
                     >
                       <span className="sources-toggle-left">
-                        <span className="sources-toggle-icon">📑</span>
+                        <span className="sources-toggle-icon"><Files size={15} /></span>
                         <span>{expandedSources[i] ? 'Hide Verified Sources' : 'Show Verified Sources'}</span>
                       </span>
-                      <span className="sources-toggle-arrow">{expandedSources[i] ? '▲' : '▼'}</span>
+                      <span className="sources-toggle-arrow">{expandedSources[i] ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</span>
                     </button>
 
                     {expandedSources[i] && (
@@ -915,7 +1070,7 @@ export default function StudentDashboard() {
                 >
                   <span className="thinking-spinner"></span>
                   <span className="thinking-title">Thinking & Retrieval Pipeline</span>
-                  <span className="thinking-arrow">{thinkingOpen ? '▲' : '▼'}</span>
+                  <span className="thinking-arrow">{thinkingOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</span>
                 </button>
 
                 {thinkingOpen && (
@@ -924,7 +1079,7 @@ export default function StudentDashboard() {
                       {thinkingSteps.map((step, idx) => (
                         <div key={idx} className={`thinking-step ${step.status}`}>
                           <span className="step-icon">
-                            {step.status === 'done' ? '✓' : step.status === 'active' ? '●' : '○'}
+                            {step.status === 'done' ? <Check size={14} /> : step.status === 'active' ? <CircleDot size={14} /> : <Circle size={14} />}
                           </span>
                           <span className="step-label">{step.label}</span>
                         </div>
@@ -959,91 +1114,71 @@ export default function StudentDashboard() {
 
           {/* Chat Input Bar */}
           <div className="chat-input-area">
-            <form className="chat-input-row" onSubmit={sendMessage}>
-              <select
-                className="chat-level-select"
-                value={level}
-                onChange={(e) => setLevel(e.target.value)}
-                disabled={loading}
-                aria-label="Level selection"
-              >
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="expert">Expert</option>
-              </select>
+            <form className="composer" onSubmit={sendMessage}>
+              {/* Controls live in a compact toolbar above the prompt */}
+              <div className="composer-toolbar">
+                <DropupSelect
+                  value={level}
+                  label={currentLevelLabel}
+                  options={levelOptions}
+                  onChange={setLevel}
+                  disabled={loading}
+                  ariaLabel="Level selection"
+                  minWidth={150}
+                />
 
-              <select
-                className="chat-model-select"
-                value={isCustomModel ? 'custom_local' : `${provider}:${model}`}
-                onChange={handleModelChange}
-                disabled={loading}
-                aria-label="Model selection"
-              >
-                <optgroup label="🌐 Online / Cloud (Groq)">
-                  {cloudModels.map(m => (
-                    <option key={`groq-${m.id}`} value={`groq:${m.id}`}>
-                      {m.name || m.id}
-                    </option>
-                  ))}
-                </optgroup>
-                {ollamaOnline ? (
-                  <optgroup label="💻 Local (Ollama - Online)">
-                    {localModels.map(m => (
-                      <option key={`local-${m.id}`} value={`local:${m.id}`}>
-                        {m.name || m.id} (Local)
-                      </option>
-                    ))}
-                    <option value="custom_local">➕ Enter custom local model...</option>
-                  </optgroup>
-                ) : (
-                  <optgroup label="💻 Local (Ollama - Not Running)">
-                    <option disabled value="offline">
-                      ⚠️ Ollama offline (Start with 'ollama serve')
-                    </option>
-                  </optgroup>
+                <DropupSelect
+                  value={isCustomModel ? 'custom_local' : `${provider}:${model}`}
+                  label={currentModelLabel}
+                  options={modelOptions}
+                  onChange={handleModelChange}
+                  disabled={loading}
+                  ariaLabel="Model selection"
+                  minWidth={250}
+                />
+
+                {isCustomModel && ollamaOnline && (
+                  <input
+                    type="text"
+                    className="chat-custom-model-input"
+                    placeholder="e.g. mistral, deepseek-r1:7b"
+                    value={customModelInput}
+                    onChange={(e) => setCustomModelInput(e.target.value)}
+                    disabled={loading}
+                    title="Enter any model name installed in your local Ollama"
+                  />
                 )}
-              </select>
 
-              {isCustomModel && ollamaOnline && (
+                <DropupSelect
+                  value={imageMode}
+                  label={currentDiagramLabel}
+                  options={diagramOptions}
+                  onChange={setImageMode}
+                  disabled={loading}
+                  ariaLabel="Diagrams mode"
+                  minWidth={220}
+                />
+              </div>
+
+              {/* Clean, full-width prompt */}
+              <div className="composer-input-row">
                 <input
                   type="text"
-                  className="chat-custom-model-input"
-                  placeholder="e.g. mistral, deepseek-r1:7b"
-                  value={customModelInput}
-                  onChange={(e) => setCustomModelInput(e.target.value)}
+                  className="chat-input"
+                  placeholder={`Ask a question about ${selectedSubject.name}...`}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
                   disabled={loading}
-                  title="Enter any model name installed in your local Ollama"
                 />
-              )}
 
-              <select
-                className="image-mode-select"
-                value={imageMode}
-                onChange={(e) => setImageMode(e.target.value)}
-                disabled={loading}
-                aria-label="Diagrams mode"
-              >
-                <option value="none">No diagrams</option>
-                <option value="notes">Notes diagrams (PDF)</option>
-                <option value="mermaid">Mermaid diagrams (Interactive)</option>
-              </select>
-
-              <input
-                type="text"
-                className="chat-input"
-                placeholder={`Ask a question about ${selectedSubject.name}...`}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                disabled={loading}
-              />
-
-              <button
-                type="submit"
-                className="chat-send"
-                disabled={loading || !input.trim()}
-              >
-                Send
-              </button>
+                <button
+                  type="submit"
+                  className="chat-send"
+                  disabled={loading || !input.trim()}
+                >
+                  Send
+                </button>
+              </div>
             </form>
           </div>
 
@@ -1054,7 +1189,7 @@ export default function StudentDashboard() {
       {lightboxImage && (
         <div className="image-lightbox-overlay" onClick={() => setLightboxImage(null)}>
           <div className="image-lightbox-content" onClick={e => e.stopPropagation()}>
-            <button className="image-lightbox-close" onClick={() => setLightboxImage(null)}>✕</button>
+            <button className="image-lightbox-close" onClick={() => setLightboxImage(null)}><X size={20} /></button>
             <img
               src={`/api${lightboxImage.url}?u=${encodeURIComponent(currentUser.username || 'student')}`}
               alt={lightboxImage.source === 'document' ? `Diagram from ${lightboxImage.document}` : 'Diagram'}

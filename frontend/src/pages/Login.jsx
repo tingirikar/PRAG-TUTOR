@@ -59,13 +59,35 @@ export default function Login() {
 
   return (
     <div className="login-wrapper">
-      <div className="login-container">
-        <div className="login-header">
-          <h1>PRAG Tutor</h1>
-          <p>Intelligent tutoring powered by RAG & Multi-Subject Knowledge</p>
+      <aside className="auth-brand">
+        <div className="auth-brand-top">
+          <span className="brand-mark">PT</span>
+          <span className="brand-name">PRAG Tutor</span>
         </div>
+        <div className="auth-brand-mid">
+          <p className="eyebrow">AI · RAG · MULTI-SUBJECT</p>
+          <h1>Answers grounded in the material you actually study.</h1>
+          <p className="lede">
+            A personalized tutor that reads your course documents and explains
+            concepts, diagrams, and derivations — subject by subject.
+          </p>
+        </div>
+        <ul className="auth-facts">
+          <li><span>01</span> Retrieval-augmented answers, tied to your sources</li>
+          <li><span>02</span> Diagrams and math rendered inline</li>
+          <li><span>03</span> Separate spaces for students and faculty</li>
+        </ul>
+      </aside>
 
-        <div className="role-tabs">
+      <main className="auth-panel">
+        <div className="login-container">
+          <div className="login-header">
+            <p className="eyebrow">Welcome back</p>
+            <h1>Sign in to continue</h1>
+            <p>Choose your role, then enter your credentials.</p>
+          </div>
+
+          <div className="role-tabs">
           <button
             className={`role-tab ${role === 'student' ? 'active' : ''}`}
             onClick={() => handleRoleChange('student')}
@@ -122,7 +144,8 @@ export default function Login() {
             </div>
           )}
         </div>
-      </div>
+        </div>
+      </main>
     </div>
   )
 }

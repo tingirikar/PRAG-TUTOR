@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Upload, Files, LogOut, UploadCloud, FileText, Check, X, Inbox } from 'lucide-react'
 import './TeacherDashboard.css'
 
 const sanitizeFileName = (fileName) => {
@@ -169,7 +170,7 @@ export default function TeacherDashboard() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-            <div className="brand-icon">L</div>
+            <div className="brand-icon">PT</div>
           <span>PRAG Tutor</span>
         </div>
 
@@ -178,14 +179,14 @@ export default function TeacherDashboard() {
             className={`nav-item ${activeTab === 'upload' ? 'active' : ''}`}
             onClick={() => setActiveTab('upload')}
           >
-            <span className="nav-icon">+</span>
+            <span className="nav-icon"><Upload size={18} /></span>
             <span>Upload</span>
           </button>
           <button
             className={`nav-item ${activeTab === 'documents' ? 'active' : ''}`}
             onClick={() => setActiveTab('documents')}
           >
-            <span className="nav-icon">•</span>
+            <span className="nav-icon"><Files size={18} /></span>
             <span>Documents</span>
           </button>
         </nav>
@@ -199,7 +200,7 @@ export default function TeacherDashboard() {
             </div>
           </div>
           <button className="nav-item" onClick={logout}>
-            <span className="nav-icon">→</span>
+            <span className="nav-icon"><LogOut size={17} /></span>
             <span>Logout</span>
           </button>
         </div>
@@ -227,7 +228,7 @@ export default function TeacherDashboard() {
                 handleFiles(e.dataTransfer.files)
               }}
             >
-              <div className="upload-icon">PDF</div>
+              <div className="upload-icon"><UploadCloud size={30} /></div>
               <h3>Drop {teacherSubject} PDF files here or click to browse</h3>
               <p>Only .pdf files are accepted</p>
               <input
@@ -245,7 +246,7 @@ export default function TeacherDashboard() {
                 <div className="file-list">
                   {files.map((f) => (
                     <div key={f.id} className="file-item">
-                      <span className="file-icon">PDF</span>
+                      <span className="file-icon"><FileText size={18} /></span>
                       <div className="file-details">
                         <div className="file-name">{f.name}</div>
                         <div className="file-size">{formatSize(f.size)}</div>
@@ -253,11 +254,11 @@ export default function TeacherDashboard() {
                       <span className={`file-status ${f.status}`}>
                         {f.status === 'pending' && 'Ready'}
                         {f.status === 'uploading' && 'Uploading…'}
-                        {f.status === 'done' && '✓ Done'}
+                        {f.status === 'done' && <><Check size={13} /> Done</>}
                         {f.status === 'error' && 'Error'}
                       </span>
                       {f.status === 'pending' && (
-                        <button className="file-remove" onClick={(e) => { e.stopPropagation(); removeFile(f.id) }}>✕</button>
+                        <button className="file-remove" onClick={(e) => { e.stopPropagation(); removeFile(f.id) }}><X size={15} /></button>
                       )}
                     </div>
                   ))}
@@ -286,7 +287,7 @@ export default function TeacherDashboard() {
 
             {documents.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">📭</div>
+                <div className="empty-icon"><Inbox size={30} /></div>
                 <p>No documents uploaded for {teacherSubject} yet.<br />Go to Upload to add PDF files.</p>
               </div>
             ) : (
@@ -316,17 +317,17 @@ export default function TeacherDashboard() {
                                 type="button"
                                 onClick={() => executeDeleteDocument(doc.name)}
                                 title="Confirm Delete"
-                                style={{ padding: '3px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                                style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
                               >
-                                ✓
+                                <Check size={14} />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setDeletingDocName(null)}
                                 title="Cancel"
-                                style={{ padding: '3px 8px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                                style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
                               >
-                                ✕
+                                <X size={14} />
                               </button>
                             </div>
                           ) : (

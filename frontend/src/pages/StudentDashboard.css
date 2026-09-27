@@ -1378,3 +1378,516 @@
   color: #94a3b8;
   font-size: 0.85rem;
 }
+
+/* Visual redesign: existing student workflow and controls are unchanged. */
+.dashboard {
+  background: linear-gradient(135deg, #f8f9fc 0%, var(--bg) 100%);
+}
+
+.sidebar {
+  border-right: 0;
+  background: #111827;
+  box-shadow: 8px 0 30px rgba(17, 24, 39, 0.08);
+}
+
+.sidebar-brand span {
+  color: #fff;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+}
+
+.brand-icon {
+  border-radius: 9px;
+  background: linear-gradient(135deg, #796ff0, #5b50d2);
+}
+
+.sidebar-section-title,
+.history-label {
+  color: #778397;
+}
+
+.nav-item,
+.btn-back-hub,
+.chat-history-item,
+.btn-logout {
+  color: #9ca7b8;
+}
+
+.nav-item:hover,
+.btn-back-hub:hover,
+.chat-history-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.nav-item.active,
+.chat-history-item.active {
+  background: rgba(121, 111, 240, 0.2);
+  color: #fff;
+}
+
+.sidebar-footer,
+.sidebar-top {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-name,
+.subject-header-text strong {
+  color: #fff;
+}
+
+.user-role,
+.subject-header-text small {
+  color: #8f9bad;
+}
+
+.user-avatar {
+  background: #675ddc;
+}
+
+.current-subject-header,
+.no-history-hint {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.btn-new-chat-chatgpt,
+.btn-enter-subject {
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6c61e7, #5047c7);
+  box-shadow: 0 8px 18px rgba(97, 87, 217, 0.18);
+}
+
+.btn-new-chat-chatgpt:hover,
+.btn-enter-subject:hover {
+  background: linear-gradient(135deg, #6257db, #463db8);
+}
+
+.subject-card {
+  border-radius: 18px;
+  box-shadow: 0 7px 24px rgba(34, 44, 70, 0.05);
+}
+
+.subject-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 38px rgba(34, 44, 70, 0.1);
+}
+
+.chat-container {
+  max-width: 1180px;
+}
+
+.welcome-message {
+  border-radius: 16px;
+  box-shadow: 0 10px 32px rgba(34, 44, 70, 0.05);
+}
+
+.chat-top-header {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+}
+
+.chat-input-row {
+  border-radius: 13px;
+  box-shadow: 0 8px 24px rgba(34, 44, 70, 0.05);
+}
+
+.chat-input-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-glow);
+}
+
+.btn-send {
+  background: linear-gradient(135deg, #6c61e7, #5047c7);
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    background: #111827;
+  }
+}
+
+/* ============================================================
+   CONSISTENCY PASS
+   - Unify the whole app to the login's ink + cobalt system
+     (was drifting into a separate purple theme).
+   - Kill the horizontal overflow that pushed chat content
+     behind the fixed sidebar.
+   - Make the transcript read like ChatGPT / Claude: a focused
+     reading column, flush assistant text, contained diagrams.
+   - Consistent tactile press feedback on every control.
+   ============================================================ */
+
+/* --- Unify colors to cobalt + ink (match Login) --- */
+.dashboard { overflow-x: hidden; }
+.sidebar {
+  background: var(--ink);
+  box-shadow: 8px 0 30px rgba(16, 17, 20, 0.12);
+}
+.brand-icon,
+.user-avatar { background: var(--accent); }
+
+.btn-new-chat-chatgpt,
+.btn-enter-subject,
+.chat-send,
+.btn-send {
+  border-radius: 10px;
+  background: var(--accent);
+  box-shadow: 0 8px 18px var(--accent-glow);
+}
+.btn-new-chat-chatgpt:hover,
+.btn-enter-subject:hover,
+.chat-send:hover,
+.btn-send:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+.nav-item.active,
+.chat-history-item.active {
+  background: rgba(37, 71, 255, 0.18);
+  color: #fff;
+}
+.subject-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 16px 38px var(--accent-glow);
+}
+
+/* --- Consistent tactile motion: every button presses in --- */
+.dashboard button {
+  transition: transform 0.12s ease, background 0.16s ease,
+    box-shadow 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.dashboard button:active { transform: translateY(1px) scale(0.99); }
+.chat-history-item:active,
+.sample-question-card:active,
+.quick-suggestion-chip:active { transform: translateY(1px) scale(0.99); }
+
+/* --- Focused conversation column (ChatGPT/Claude width) --- */
+.chat-container { max-width: 820px; }
+.chat-messages { min-width: 0; overflow-x: hidden; }
+
+/* User keeps a cobalt bubble; assistant text sits flush like Claude */
+.chat-bubble { max-width: 100%; }
+.chat-bubble.user {
+  background: var(--accent);
+  border-radius: 18px;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 6px 16px var(--accent-glow);
+}
+.chat-bubble.assistant {
+  border: 0;
+  background: transparent;
+  padding: 2px 2px 4px;
+  overflow: hidden;
+}
+
+/* Never let long tokens, code, or math force a horizontal scroll */
+.assistant-text-content { min-width: 0; overflow-wrap: anywhere; }
+.assistant-text-content pre { max-width: 100%; }
+.assistant-text-content .katex-display { max-width: 100%; overflow-x: auto; }
+.msg-badges { border-bottom-color: var(--border); }
+
+/* --- Calm, contained diagrams (were oversized + bleeding out) --- */
+.mermaid-container-card {
+  max-width: 100%;
+  box-shadow: 0 6px 20px rgba(16, 17, 20, 0.16);
+}
+.mermaid-rendered-svg {
+  max-height: 440px;
+  overflow: auto;
+  padding: 18px 14px;
+}
+.mermaid-rendered-svg svg {
+  width: auto;
+  max-width: 100% !important;
+  max-height: 400px !important;
+  height: auto !important;
+}
+
+/* Cobalt accent for the badges that were terracotta-tinted */
+.badge-topic { border-color: #c3ccff; }
+.subject-card-icon,
+.hub-feature-icon { color: var(--accent); }
+
+/* ============================================================
+   MODERN COMPOSER
+   Top bar removed (its actions live in the sidebar). Controls
+   now sit in a compact toolbar ABOVE a clean, full-width prompt.
+   ============================================================ */
+.chat-input-area {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 12px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(16, 17, 20, 0.06);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-glow), 0 10px 30px rgba(16, 17, 20, 0.06);
+}
+
+/* Compact control toolbar */
+.composer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Dropup Container & Trigger */
+.dropup-container {
+  position: relative;
+  display: inline-block;
+}
+
+.dropup-container.open {
+  z-index: 120;
+}
+
+.dropup-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px 0 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dropup-trigger:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background-color: var(--surface);
+}
+
+.dropup-trigger:focus-visible,
+.dropup-trigger.active {
+  outline: none;
+  border-color: var(--accent);
+  background-color: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.dropup-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dropup-trigger-label {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropup-arrow {
+  color: var(--text-dim);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.dropup-trigger:hover .dropup-arrow,
+.dropup-trigger.active .dropup-arrow {
+  color: var(--accent);
+}
+
+.dropup-arrow.rotate {
+  transform: rotate(180deg);
+}
+
+/* Dropup Menu (Always Opens Upward) */
+.dropup-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 1000;
+  min-width: 170px;
+  max-width: 320px;
+  max-height: 290px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow, 0 18px 44px rgba(16, 20, 34, 0.14));
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: dropupSlideUp 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropup-align-right {
+  left: auto;
+  right: 0;
+}
+
+@keyframes dropupSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dropup-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dropup-group + .dropup-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.dropup-group-title {
+  padding: 6px 10px 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.dropup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  user-select: none;
+}
+
+.dropup-item:hover:not(:disabled) {
+  background-color: var(--surface-2);
+  color: var(--text);
+}
+
+.dropup-item.selected {
+  background-color: var(--accent-light, #e6eaff);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.dropup-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.dropup-item-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropup-check {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.composer-toolbar .chat-custom-model-input {
+  height: 34px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: text;
+  min-width: 170px;
+  padding: 0 12px;
+  border-style: dashed;
+  border-color: var(--accent);
+}
+
+/* Full-width prompt row */
+.composer-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.composer-input-row .chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 6px;
+  font-size: 1rem;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.composer-input-row .chat-input::placeholder { color: var(--text-muted); }
+
+.composer-input-row .chat-send {
+  flex: 0 0 auto;
+  height: 42px;
+  padding: 0 22px;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  box-shadow: 0 6px 16px var(--accent-glow);
+}
+
+.composer-input-row .chat-send:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.composer-input-row .chat-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .composer-toolbar .dropup-container,
+  .composer-toolbar .chat-custom-model-input { flex: 1 1 auto; }
+  .composer-toolbar .dropup-trigger { width: 100%; justify-content: space-between; }
+}
