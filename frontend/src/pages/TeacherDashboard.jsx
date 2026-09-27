@@ -10,16 +10,24 @@ export default function TeacherDashboard() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
 
+  const [currentUser, setCurrentUser] = useState(() => JSON.parse(sessionStorage.getItem('user') || '{}'))
+  const teacherSubject = currentUser.subject || (currentUser.username === 'teacher_ml' ? 'ML' : 'DSA')
+
   // Auth guard
   useEffect(() => {
     const user = JSON.parse(sessionStorage.getItem('user') || '{}')
-    if (user.role !== 'teacher') navigate('/', { replace: true })
+    if (user.role !== 'teacher') {
+      navigate('/', { replace: true })
+    } else {
+      setCurrentUser(user)
+    }
   }, [navigate])
 
   const [files, setFiles] = useState([])          // staged files
   const [documents, setDocuments] = useState([])   // "uploaded" documents
   const [activeTab, setActiveTab] = useState('upload')
   const [dragOver, setDragOver] = useState(false)
+  const [deletingDocName, setDeletingDocName] = useState(null)
 
   const handleFiles = (fileList) => {
     const pdfs = Array.from(fileList).filter(f => f.type === 'application/pdf')
@@ -64,7 +72,7 @@ export default function TeacherDashboard() {
 
   const fetchDocuments = async () => {
     try {
-      const res = await fetch('/api/documents')
+      const res = await fetch(`/api/documents?subject=${encodeURIComponent(teacherSubject)}`)
       if (res.ok) {
         const data = await res.json()
         setDocuments(data.documents || [])
@@ -74,14 +82,14 @@ export default function TeacherDashboard() {
     }
   }
 
-  const deleteDocument = async (name) => {
-    if (!window.confirm(`Are you sure you want to delete "${name}" and prune its vectors from the vector database?`)) return
+  const executeDeleteDocument = async (name) => {
     try {
       const res = await fetch('/api/documents/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: sanitizeFileName(name) }),
+        body: JSON.stringify({ filename: sanitizeFileName(name), subject: teacherSubject }),
       })
+      setDeletingDocName(null)
       if (res.ok) {
         fetchDocuments()
       } else {
@@ -90,13 +98,14 @@ export default function TeacherDashboard() {
       }
     } catch (err) {
       console.error('Delete error:', err)
+      setDeletingDocName(null)
       alert('Error deleting document')
     }
   }
 
   useEffect(() => {
     fetchDocuments()
-  }, [activeTab])
+  }, [activeTab, teacherSubject])
 
   const uploadAll = async () => {
     const pendingFiles = files.filter(f => f.status === 'pending')
@@ -108,6 +117,7 @@ export default function TeacherDashboard() {
       try {
         const formData = new FormData()
         formData.append('file', f.file)
+        formData.append('subject', teacherSubject)
 
         // Add timeout to prevent hanging indefinitely
         const controller = new AbortController()
@@ -182,10 +192,10 @@ export default function TeacherDashboard() {
 
         <div className="sidebar-footer">
           <div className="user-info">
-            <div className="user-avatar">T</div>
+            <div className="user-avatar">{currentUser.name?.charAt(0) || 'T'}</div>
             <div>
-              <div className="user-name">Teacher</div>
-              <div className="user-role">Instructor</div>
+              <div className="user-name">{currentUser.name || 'Teacher'}</div>
+              <div className="user-role">{teacherSubject} Faculty</div>
             </div>
           </div>
           <button className="nav-item" onClick={logout}>
@@ -202,8 +212,8 @@ export default function TeacherDashboard() {
         {activeTab === 'upload' && (
           <div>
             <div className="page-header">
-              <h2>Upload Documents</h2>
-              <p>Upload PDF files to create embeddings for student RAG</p>
+              <h2>Upload Documents &bull; <span style={{ color: 'var(--accent)' }}>{teacherSubject}</span></h2>
+              <p>Upload PDF files to create embeddings for student RAG in {teacherSubject}</p>
             </div>
 
             <div
@@ -218,7 +228,7 @@ export default function TeacherDashboard() {
               }}
             >
               <div className="upload-icon">PDF</div>
-              <h3>Drop PDF files here or click to browse</h3>
+              <h3>Drop {teacherSubject} PDF files here or click to browse</h3>
               <p>Only .pdf files are accepted</p>
               <input
                 ref={fileInputRef}
@@ -255,7 +265,7 @@ export default function TeacherDashboard() {
 
                 <div className="upload-actions">
                   <button className="btn-accent" onClick={uploadAll}>
-                    Upload All ({files.filter(f => f.status === 'pending').length})
+                    Upload All to {teacherSubject} ({files.filter(f => f.status === 'pending').length})
                   </button>
                   {files.some(f => f.status === 'done') && (
                     <button className="btn-secondary" onClick={clearDone}>Clear Done</button>
@@ -270,14 +280,14 @@ export default function TeacherDashboard() {
         {activeTab === 'documents' && (
           <div>
             <div className="page-header">
-              <h2>Documents</h2>
-              <p>All uploaded and indexed documents</p>
+              <h2>{teacherSubject} Course Documents</h2>
+              <p>All uploaded and indexed documents for {teacherSubject}</p>
             </div>
 
             {documents.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">📭</div>
-                <p>No documents uploaded yet.<br />Go to Upload to add PDF files.</p>
+                <p>No documents uploaded for {teacherSubject} yet.<br />Go to Upload to add PDF files.</p>
               </div>
             ) : (
               <div className="doc-table-card">
@@ -299,13 +309,35 @@ export default function TeacherDashboard() {
                         <td>{doc.uploadedAt}</td>
                         <td><span className="badge badge-green">{doc.status}</span></td>
                         <td>
-                          <button
-                            className="btn-table-delete"
-                            onClick={() => deleteDocument(doc.name)}
-                            title="Delete document and remove from index"
-                          >
-                            Delete
-                          </button>
+                          {deletingDocName === doc.name ? (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 600 }}>Delete?</span>
+                              <button
+                                type="button"
+                                onClick={() => executeDeleteDocument(doc.name)}
+                                title="Confirm Delete"
+                                style={{ padding: '3px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingDocName(null)}
+                                title="Cancel"
+                                style={{ padding: '3px 8px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              className="btn-table-delete"
+                              onClick={() => setDeletingDocName(doc.name)}
+                              title="Delete document and remove from index"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

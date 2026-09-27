@@ -5,7 +5,88 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import mermaid from 'mermaid'
 import './StudentDashboard.css'
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  securityLevel: 'loose',
+  themeVariables: {
+    darkMode: true,
+    background: '#131b2e',
+    primaryColor: '#2563eb',
+    primaryTextColor: '#f8fafc',
+    primaryBorderColor: '#3b82f6',
+    lineColor: '#60a5fa',
+    secondaryColor: '#1e293b',
+    tertiaryColor: '#0f172a'
+  }
+})
+
+function MermaidBlock({ code }) {
+  const [svg, setSvg] = useState('')
+  const [error, setError] = useState(false)
+  const idRef = useRef(`mermaid-${Math.random().toString(36).substring(2, 9)}`)
+
+  useEffect(() => {
+    let isMounted = true
+    const cleanCode = (code || '').trim()
+    if (!cleanCode) return
+
+    mermaid.render(idRef.current, cleanCode)
+      .then(({ svg }) => {
+        if (isMounted) {
+          setSvg(svg)
+          setError(false)
+        }
+      })
+      .catch((err) => {
+        console.warn('Mermaid render error:', err)
+        if (isMounted) {
+          setError(true)
+        }
+      })
+
+    return () => {
+      isMounted = false
+      const el = document.getElementById(idRef.current)
+      if (el) el.remove()
+    }
+  }, [code])
+
+  if (error) {
+    return (
+      <div className="mermaid-fallback-box">
+        <div className="mermaid-header">
+          <span className="mermaid-badge">📊 Mermaid Diagram (Syntax Preview)</span>
+        </div>
+        <pre className="mermaid-code-pre"><code>{code}</code></pre>
+      </div>
+    )
+  }
+
+  if (!svg) {
+    return (
+      <div className="mermaid-loading-box">
+        <span className="image-loading-spinner" aria-hidden="true"></span>
+        <span>Rendering interactive diagram...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mermaid-container-card">
+      <div className="mermaid-header">
+        <span className="mermaid-badge">📊 Interactive Mermaid Diagram</span>
+      </div>
+      <div
+        className="mermaid-rendered-svg"
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+    </div>
+  )
+}
 
 function preprocessLaTeX(content) {
   if (!content) return ''
@@ -22,6 +103,21 @@ function formatContent(content) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
+      components={{
+        code({ node, inline, className, children, ...props }) {
+          const codeText = String(children || '').replace(/\n$/, '')
+          const match = /language-(\w+)/.exec(className || '')
+          const isMermaid = (match && match[1] === 'mermaid') || (!inline && /^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph)\b/.test(codeText))
+          if (!inline && isMermaid) {
+            return <MermaidBlock code={codeText} />
+          }
+          return (
+            <code className={className} {...props}>
+              {children}
+            </code>
+          )
+        }
+      }}
     >
       {preprocessLaTeX(content)}
     </ReactMarkdown>
@@ -95,6 +191,8 @@ export default function StudentDashboard() {
   const [thinkingOpen, setThinkingOpen] = useState(false)
   const [thinkingSteps, setThinkingSteps] = useState([])
 
+  const [ollamaOnline, setOllamaOnline] = useState(false)
+
   // Load subjects & available models on mount
   useEffect(() => {
     fetch('/api/subjects')
@@ -111,6 +209,7 @@ export default function StudentDashboard() {
       .then(data => {
         if (data.cloud_models && data.cloud_models.length > 0) setCloudModels(data.cloud_models)
         if (data.local_models && data.local_models.length > 0) setLocalModels(data.local_models)
+        setOllamaOnline(Boolean(data.ollama_online))
       })
       .catch(err => console.warn('Could not load dynamic models list:', err))
   }, [])
@@ -279,9 +378,14 @@ export default function StudentDashboard() {
       { label: `Searching ${selectedSubject.name} curriculum`, status: 'active' },
       { label: 'Verifying course concepts', status: 'pending' },
     ]
-    if (imageMode !== 'none') {
+    if (imageMode === 'mermaid') {
       steps.push({
-        label: imageMode === 'notes' ? 'Loading diagrams from course notes' : 'Generating an AI visual diagram',
+        label: 'Generating interactive Mermaid diagram',
+        status: 'pending'
+      })
+    } else if (imageMode === 'notes') {
+      steps.push({
+        label: 'Checking course notes for genuine diagrams',
         status: 'pending'
       })
     }
@@ -305,7 +409,8 @@ export default function StudentDashboard() {
           model: activeModelName,
           provider,
           history,
-          include_image: false
+          include_image: false,
+          image_mode: imageMode,
         }),
       })
 
@@ -333,7 +438,7 @@ export default function StudentDashboard() {
           prerequisites: data.prerequisites || [],
           sources: data.sources || [],
           images: data.images || [],
-          imagesLoading: imageMode !== 'none',
+          imagesLoading: imageMode === 'notes',
           level: chosenLevel,
           model: data.model || activeModelName,
           provider: data.provider || provider,
@@ -342,11 +447,11 @@ export default function StudentDashboard() {
 
       setLoading(false)
 
-      if (imageMode !== 'none') {
+      if (imageMode === 'notes') {
         fetch('/api/query/images', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, topic: data.topic || '', mode: imageMode, subject: selectedSubject.code }),
+          body: JSON.stringify({ query, topic: data.topic || '', mode: 'notes', subject: selectedSubject.code }),
         })
           .then(async imageRes => {
             const imageData = await imageRes.json()
@@ -746,12 +851,12 @@ export default function StudentDashboard() {
                               title="Click to expand"
                             >
                               <img
-                                src={`/api${img.url}`}
+                                src={`/api${img.url}?u=${encodeURIComponent(currentUser.username || 'student')}`}
                                 alt={img.source === 'document' ? `Diagram from ${img.document}, page ${img.page + 1}` : 'Diagram'}
                                 loading="lazy"
                               />
                               <div className="image-source-badge document">
-                                <span>{img.source === 'document' ? `📄 ${img.document} (p. ${img.page + 1})` : '🤖 AI Generated'}</span>
+                                <span>📄 {img.document} (p. {img.page + 1})</span>
                               </div>
                             </div>
                           ))}
@@ -881,17 +986,25 @@ export default function StudentDashboard() {
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="💻 Local (Ollama)">
-                  {localModels.map(m => (
-                    <option key={`local-${m.id}`} value={`local:${m.id}`}>
-                      {m.name || m.id} (Local)
+                {ollamaOnline ? (
+                  <optgroup label="💻 Local (Ollama - Online)">
+                    {localModels.map(m => (
+                      <option key={`local-${m.id}`} value={`local:${m.id}`}>
+                        {m.name || m.id} (Local)
+                      </option>
+                    ))}
+                    <option value="custom_local">➕ Enter custom local model...</option>
+                  </optgroup>
+                ) : (
+                  <optgroup label="💻 Local (Ollama - Not Running)">
+                    <option disabled value="offline">
+                      ⚠️ Ollama offline (Start with 'ollama serve')
                     </option>
-                  ))}
-                  <option value="custom_local">➕ Enter custom local model...</option>
-                </optgroup>
+                  </optgroup>
+                )}
               </select>
 
-              {isCustomModel && (
+              {isCustomModel && ollamaOnline && (
                 <input
                   type="text"
                   className="chat-custom-model-input"
@@ -908,11 +1021,11 @@ export default function StudentDashboard() {
                 value={imageMode}
                 onChange={(e) => setImageMode(e.target.value)}
                 disabled={loading}
-                aria-label="Image source"
+                aria-label="Diagrams mode"
               >
-                <option value="none">No image</option>
-                <option value="notes">Notes images</option>
-                <option value="ai">AI generated</option>
+                <option value="none">No diagrams</option>
+                <option value="notes">Notes diagrams (PDF)</option>
+                <option value="mermaid">Mermaid diagrams (Interactive)</option>
               </select>
 
               <input
@@ -943,11 +1056,11 @@ export default function StudentDashboard() {
           <div className="image-lightbox-content" onClick={e => e.stopPropagation()}>
             <button className="image-lightbox-close" onClick={() => setLightboxImage(null)}>✕</button>
             <img
-              src={`/api${lightboxImage.url}`}
+              src={`/api${lightboxImage.url}?u=${encodeURIComponent(currentUser.username || 'student')}`}
               alt={lightboxImage.source === 'document' ? `Diagram from ${lightboxImage.document}` : 'Diagram'}
             />
             <div className="image-lightbox-meta">
-              <span>{lightboxImage.source === 'document' ? `From: ${lightboxImage.document} (Page ${lightboxImage.page + 1})` : 'AI Generated Visual'}</span>
+              <span>From: {lightboxImage.document} (Page {lightboxImage.page + 1})</span>
             </div>
           </div>
         </div>

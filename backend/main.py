@@ -12,25 +12,6 @@ from document_processing import DocumentProcessor
 from image_handler import ImageHandler
 from response_generation import ResponseGenerator
 from user_view import QueryProcessor
-try:
-    from agents import (
-        CriticAgent,
-        PedagogicalAgent,
-        PrerequisiteAgent,
-        RetrievalAgent,
-        SupervisorAgent,
-        TutorMultiAgentOrchestrator,
-        VisualAgent,
-    )
-except ModuleNotFoundError:
-    # Keep the core tutor available when the optional agent layer is absent.
-    CriticAgent = None
-    PedagogicalAgent = None
-    PrerequisiteAgent = None
-    RetrievalAgent = None
-    SupervisorAgent = None
-    TutorMultiAgentOrchestrator = None
-    VisualAgent = None
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
@@ -54,6 +35,7 @@ class QueryRequest(BaseModel):
     level: str = "beginner"
     history: List[Dict[str, str]] = Field(default_factory=list)
     include_image: bool = True
+    image_mode: str = "notes"
     model: Optional[str] = None
     provider: Optional[str] = None
 
@@ -62,14 +44,17 @@ class ImageRequest(BaseModel):
     query: str = Field(min_length=1)
     topic: str = ""
     mode: str = "notes"
+    subject: Optional[str] = "DSA"
 
 
 class DocumentRequest(BaseModel):
     filename: str = Field(min_length=1)
+    subject: Optional[str] = "DSA"
 
 
 class IndexRequest(BaseModel):
     filenames: List[str] = Field(default_factory=list)
+    subject: Optional[str] = "DSA"
 
 
 print("Initializing Python RAG service...")
@@ -124,43 +109,7 @@ except Exception as error:
     print(f"[Warning] Failed to initialize image handler: {error}")
     image_handler = None
 
-orchestrator = None
-try:
-    supervisor = SupervisorAgent(
-        groq_client=response_generator.groq_client if response_generator else None,
-        documents_dir=UPLOAD_DIR,
-    )
-    prereq_agent = PrerequisiteAgent(
-        prerequisites_data=response_generator.prerequisites_data if response_generator else {},
-    )
-    retrieval_agent = RetrievalAgent(
-        pinecone_index=response_generator.index if response_generator else None,
-        embedding_model=embedding_model,
-        documents_dir=UPLOAD_DIR,
-    )
-    pedagogical_agent = PedagogicalAgent(
-        groq_client=response_generator.groq_client if response_generator else None,
-        model_name=getattr(response_generator, "model_name", "openai/gpt-oss-20b"),
-    )
-    visual_agent = VisualAgent(
-        image_handler=image_handler,
-    )
-    critic_agent = CriticAgent(
-        groq_client=response_generator.groq_client if response_generator else None,
-        model_name=getattr(response_generator, "model_name", "openai/gpt-oss-20b"),
-    )
-    orchestrator = TutorMultiAgentOrchestrator(
-        supervisor=supervisor,
-        prerequisite_agent=prereq_agent,
-        retrieval_agent=retrieval_agent,
-        pedagogical_agent=pedagogical_agent,
-        visual_agent=visual_agent,
-        critic_agent=critic_agent,
-    )
-    print("Multi-Agent Orchestrator initialized successfully.")
-except Exception as error:
-    print(f"[Warning] Failed to initialize Multi-Agent Orchestrator: {error}")
-    orchestrator = None
+
 
 
 @app.get("/health")
@@ -169,7 +118,7 @@ def health() -> Dict[str, Any]:
         "status": "ok",
         "embedding_model": embedding_model is not None,
         "response_generator": response_generator is not None,
-        "multi_agent": orchestrator is not None,
+        "multi_agent": False,
         "document_processor": document_processor is not None,
         "image_handler": image_handler is not None,
         "prerequisite_topics": len(response_generator.prerequisites_data) if response_generator else 0,
@@ -200,23 +149,13 @@ async def query(request: QueryRequest) -> Dict[str, Any]:
             status_code=503,
             detail="Embedding model is unavailable. Check server logs for details.",
         )
-    if not response_generator and not orchestrator:
+    if not response_generator:
         raise HTTPException(
             status_code=503,
             detail="Response generator is unavailable. Configure PINECONE_API_KEY and GROQ_API_KEY.",
         )
 
     try:
-        # Primary execution via Multi-Agent Orchestrator
-        if orchestrator:
-            return await orchestrator.run(
-                query=request.query,
-                level=request.level.lower(),
-                history=request.history,
-                include_image=request.include_image,
-            )
-
-        # Fallback to legacy single-pipeline response generator
         processed = query_processor.process_query(request.query, request.level.lower())
         query_embedding = embedding_model.encode(processed["query"])
         result = response_generator.respond_to_user(
@@ -227,17 +166,19 @@ async def query(request: QueryRequest) -> Dict[str, Any]:
             preferred_model=request.model,
             provider=request.provider,
             subject=request.subject,
+            image_mode=request.image_mode,
         )
         response_text = getattr(result, "response", str(result))
 
-        # Multi-modal: fetch images if requested
+        # Multi-modal: fetch genuine PDF images only if requested and notes mode is active
         images = []
-        if request.include_image and image_handler:
-            matches = response_generator.fetch_answer(query_embedding, top_k=5)
+        if request.include_image and request.image_mode == "notes" and image_handler:
+            matches = response_generator.fetch_answer(query_embedding, top_k=5, subject=request.subject)
             images = image_handler.get_images(
                 matches=matches,
                 user_question=request.query,
                 topic=getattr(result, "topic", None),
+                mode="notes",
             )
 
         return {
@@ -314,7 +255,7 @@ def images(request: ImageRequest) -> Dict[str, Any]:
     try:
         processed = query_processor.process_query(request.query, "beginner")
         query_embedding = embedding_model.encode(processed["query"])
-        matches = response_generator.fetch_answer(query_embedding, top_k=5)
+        matches = response_generator.fetch_answer(query_embedding, top_k=5, subject=request.subject)
         result = image_handler.get_images(
             matches=matches,
             user_question=request.query,
@@ -331,22 +272,20 @@ def index_documents(request: IndexRequest = IndexRequest()) -> Dict[str, Any]:
     if not document_processor:
         raise HTTPException(status_code=503, detail="Document processor is unavailable.")
     try:
-        # If specific filenames are provided, only process those
+        # If specific filenames are provided, process those with subject namespace
         if request.filenames:
             for filename in request.filenames:
                 filepath = os.path.join(UPLOAD_DIR, filename)
                 if os.path.exists(filepath):
-                    document_processor.process_single_pdf(filepath)
+                    document_processor.process_single_pdf(filepath, subject=request.subject)
         else:
-            # Process all documents if no specific filenames provided
             document_processor.upload_to_vector_db()
         
         if response_generator:
             response_generator.reload_prerequisites()
-            if orchestrator:
-                orchestrator.reload_prerequisites(response_generator.prerequisites_data)
         return {
             "message": "Documents indexed successfully.",
+            "subject": request.subject,
             "prerequisite_topics": len(response_generator.prerequisites_data) if response_generator else 0,
         }
     except Exception as error:
@@ -358,14 +297,13 @@ def delete_document(request: DocumentRequest) -> Dict[str, Any]:
     if not document_processor:
         raise HTTPException(status_code=503, detail="Document processor is unavailable.")
     try:
-        result = document_processor.delete_document(request.filename)
+        result = document_processor.delete_document(request.filename, subject=request.subject)
         if response_generator:
             response_generator.reload_prerequisites()
-            if orchestrator:
-                orchestrator.reload_prerequisites(response_generator.prerequisites_data)
         return {
             "message": f"Document '{request.filename}' deleted successfully.",
             **result,
+            "subject": request.subject,
             "prerequisite_topics": len(response_generator.prerequisites_data) if response_generator else 0,
         }
     except FileNotFoundError as error:
@@ -379,8 +317,6 @@ def reload_prerequisites() -> Dict[str, Any]:
     if not response_generator:
         raise HTTPException(status_code=503, detail="Response generator is unavailable.")
     prereqs = response_generator.reload_prerequisites()
-    if orchestrator:
-        orchestrator.reload_prerequisites(prereqs)
     return {
         "status": "ok",
         "count": len(prereqs),

@@ -13,16 +13,15 @@ def processor():
     return QueryProcessor()
 
 
-def test_process_query_removes_stop_words_and_preserves_level(processor):
+def test_process_query_preserves_natural_language_and_level(processor):
     result = processor.process_query("How does the stack work?", "beginner")
 
     assert result["level"] == "beginner"
-    assert "stack" in result["query"].lower()
-    assert "work" in result["query"].lower()
-    assert " the " not in f" {result['query'].lower()} "
+    assert result["query"] == "How does the stack work?"
 
 
-def test_preprocess_query_removes_punctuation(processor):
-    result = processor.preprocess_query("Binary-search, trees!")
+def test_process_query_cleans_extra_whitespace(processor):
+    result = processor.process_query("   Explain    binary   search   ", "intermediate")
 
-    assert result == "Binary search trees"
+    assert result["level"] == "intermediate"
+    assert result["query"] == "Explain binary search"

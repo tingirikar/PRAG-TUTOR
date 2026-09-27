@@ -16,8 +16,39 @@ const port = Number(process.env.PORT || 5000)
 
 await fs.mkdir(uploadDir, { recursive: true })
 
-// Database connection: Local MongoDB by default or MONGODB_URI if set
-const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/lpi_tutor'
+// Database connection: Load .env if present
+async function loadEnvFiles() {
+  const envCandidates = [
+    path.join(projectRoot, '.env'),
+    path.join(projectRoot, 'backend', '.env'),
+    path.join(__dirname, '.env'),
+  ]
+  for (const envPath of envCandidates) {
+    try {
+      const content = await fs.readFile(envPath, 'utf8')
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#')) continue
+        const match = trimmed.match(/^([^=]+)=(.*)$/)
+        if (match) {
+          const key = match[1].trim()
+          let val = match[2].trim()
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1)
+          }
+          if (!process.env[key]) {
+            process.env[key] = val
+          }
+        }
+      }
+    } catch {
+      // file not found, continue
+    }
+  }
+}
+
+await loadEnvFiles()
+
 let mongoReady = false
 
 const userSchema = new mongoose.Schema({
@@ -26,6 +57,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   role: { type: String, enum: ['student', 'teacher'], required: true },
   subject: { type: String, default: null }, // 'DSA' or 'ML'
+  enrolledSubjects: { type: [String], default: ['DSA', 'ML'] },
 }, { timestamps: true })
 const User = mongoose.models.User || mongoose.model('User', userSchema)
 
@@ -76,7 +108,7 @@ async function seedDatabase() {
     if (userCount === 0) {
       console.log('Seeding initial student and teacher accounts...')
       await User.insertMany([
-        { username: 'student', password: 'student123', name: 'Alex (Student)', role: 'student' },
+        { username: 'student', password: 'student123', name: 'Alex (Student)', role: 'student', enrolledSubjects: ['DSA', 'ML'] },
         { username: 'teacher_dsa', password: 'dsa123', name: 'Dr. Sarah (DSA Faculty)', role: 'teacher', subject: 'DSA' },
         { username: 'teacher_ml', password: 'ml123', name: 'Prof. Alan (ML Faculty)', role: 'teacher', subject: 'ML' },
       ])
@@ -111,13 +143,32 @@ async function seedDatabase() {
   }
 }
 
-try {
-  await mongoose.connect(mongoUri)
-  mongoReady = true
-  console.log('MongoDB connected to', mongoUri)
-  await seedDatabase()
-} catch (error) {
-  console.warn(`MongoDB connection notice: ${error.message}`)
+const configuredMongoUri = process.env.MONGODB_URI
+const localMongoUri = 'mongodb://127.0.0.1:27017/lpi_tutor'
+
+if (configuredMongoUri) {
+  try {
+    const isAtlas = configuredMongoUri.includes('@')
+    console.log(`Connecting to ${isAtlas ? 'configured MongoDB Atlas' : 'configured MongoDB'}...`)
+    await mongoose.connect(configuredMongoUri, { serverSelectionTimeoutMS: 5000 })
+    mongoReady = true
+    console.log('MongoDB connected successfully to configured URI.')
+    await seedDatabase()
+  } catch (err) {
+    console.warn(`Configured MongoDB connection notice: ${err.message}. Falling back to local MongoDB...`)
+  }
+}
+
+if (!mongoReady) {
+  try {
+    console.log('Connecting to local MongoDB (127.0.0.1:27017)...')
+    await mongoose.connect(localMongoUri, { serverSelectionTimeoutMS: 3000 })
+    mongoReady = true
+    console.log('MongoDB connected to local instance.')
+    await seedDatabase()
+  } catch (error) {
+    console.warn(`Local MongoDB connection notice: ${error.message}`)
+  }
 }
 
 const app = express()
@@ -360,6 +411,7 @@ app.post('/api/query', async (request, response) => {
         provider: request.body?.provider || 'groq',
         history: request.body?.history || [],
         include_image: request.body?.include_image !== undefined ? Boolean(request.body.include_image) : true,
+        image_mode: request.body?.image_mode || 'notes',
       }),
       timeout: 180000, // 3 minute timeout for query processing
     })
@@ -440,6 +492,7 @@ app.post('/api/query/images', async (request, response) => {
         query,
         topic: request.body?.topic || '',
         mode: request.body?.mode || 'notes',
+        subject: request.body?.subject || 'DSA',
       }),
       timeout: 120000, // 2 minute timeout for image loading
     })
@@ -476,33 +529,36 @@ app.get('/api/prerequisites', async (_request, response) => {
 app.post('/api/upload', upload.fields([{ name: 'file', maxCount: 20 }, { name: 'files', maxCount: 20 }]), async (request, response) => {
   const files = [...(request.files?.file || []), ...(request.files?.files || [])]
   if (!files.length) return response.status(400).json({ error: 'No PDF file uploaded.' })
+  const subject = String(request.body?.subject || request.query?.subject || 'DSA').trim()
 
   try {
     if (mongoReady) {
       await Promise.all(files.map(file => Document.findOneAndUpdate(
         { name: file.filename },
-        { name: file.filename, size: file.size, uploadedAt: new Date(), status: 'Uploaded' },
+        { name: file.filename, size: file.size, subject, uploadedAt: new Date(), status: 'Uploaded' },
         { upsert: true, new: true },
       )))
     }
-    // Only process the newly uploaded files
+    // Only process the newly uploaded files for the given subject
     const filenames = files.map(file => file.filename)
     await callPython('/rag/index', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filenames }),
+      body: JSON.stringify({ filenames, subject }),
       timeout: 300000, // 5 minute timeout for document indexing
     })
     if (mongoReady) await Document.updateMany({ name: { $in: filenames } }, { status: 'Indexed' })
-    response.json({ message: `Successfully uploaded and indexed ${files.length} document(s).`, files: filenames })
+    response.json({ message: `Successfully uploaded and indexed ${files.length} document(s) for ${subject}.`, files: filenames, subject })
   } catch (error) {
     response.status(error.status || 500).json({ error: error.message })
   }
 })
 
-app.get('/api/documents', async (_request, response) => {
+app.get('/api/documents', async (request, response) => {
   try {
-    const documents = mongoReady ? await Document.find().sort({ uploadedAt: -1 }).lean() : await filesystemDocuments()
+    const subject = request.query?.subject ? String(request.query.subject).trim() : null
+    const filter = subject ? { subject } : {}
+    const documents = mongoReady ? await Document.find(filter).sort({ uploadedAt: -1 }).lean() : await filesystemDocuments()
     response.json({ documents: documents.map(document => ({ ...document, id: document.id || document._id?.toString() })) })
   } catch (error) {
     response.status(500).json({ error: error.message })
@@ -511,35 +567,135 @@ app.get('/api/documents', async (_request, response) => {
 
 app.post('/api/documents/delete', async (request, response) => {
   const filename = path.basename(String(request.body?.filename || ''))
+  const subject = request.body?.subject ? String(request.body.subject).trim() : 'DSA'
   if (!filename) return response.status(400).json({ error: 'Filename is required.' })
 
   try {
     const result = await callPython('/rag/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename }),
+      body: JSON.stringify({ filename, subject }),
       timeout: 60000, // 1 minute timeout for document deletion
     })
-    if (mongoReady) await Document.deleteOne({ name: filename })
-    response.json({ message: `Document '${filename}' deleted successfully.`, ...result })
+    if (mongoReady) await Document.deleteOne({ name: filename, ...(subject ? { subject } : {}) })
+    response.json({ message: `Document '${filename}' deleted successfully from ${subject}.`, ...result })
   } catch (error) {
     response.status(error.status || 500).json({ error: error.message })
   }
 })
 
-// Proxy image requests to the Python service's static image files
+// Proxy image requests to the Python service with authentication, subject authorization, and path safety checks (Ghost 8 Fix)
 app.get('/api/images/{*imagePath}', async (request, response) => {
   try {
     const rawPath = request.params.imagePath || request.params[0]
-    const imagePath = Array.isArray(rawPath) ? rawPath.join('/') : rawPath
+    let imagePath = Array.isArray(rawPath) ? rawPath.join('/') : rawPath
+    if (!imagePath) {
+      return response.status(400).json({ error: 'Image path is required.' })
+    }
+
+    // Try decoding URI component to prevent encoded traversal attacks (%2e%2e)
+    try {
+      imagePath = decodeURIComponent(imagePath)
+    } catch {
+      return response.status(400).json({ error: 'Malformed image path encoding.' })
+    }
+
+    // 1. Path traversal security check
+    if (imagePath.includes('..') || path.isAbsolute(imagePath)) {
+      return response.status(400).json({ error: 'Invalid or unsafe image path.' })
+    }
+
+    // 2. Authentication check: user must provide valid student or teacher credentials
+    const username = (request.query?.u || request.headers['x-user'] || '').toString().trim()
+    if (!username) {
+      return response.status(401).json({ error: 'Unauthorized: login required to access course diagrams.' })
+    }
+
+    let user = null
+    if (mongoReady) {
+      user = await User.findOne({ username })
+    } else {
+      const demoUsers = {
+        student: { username: 'student', role: 'student', enrolledSubjects: ['DSA', 'ML'] },
+        teacher_dsa: { username: 'teacher_dsa', role: 'teacher', subject: 'DSA' },
+        teacher_ml: { username: 'teacher_ml', role: 'teacher', subject: 'ML' },
+      }
+      user = demoUsers[username] || null
+    }
+
+    if (!user) {
+      return response.status(403).json({ error: 'Forbidden: invalid student or faculty account.' })
+    }
+
+    // 3. Document and Subject Authorization Check
+    const segments = imagePath.split('/').filter(Boolean)
+    if (segments.length >= 1) {
+      const folderStem = segments[0]
+      let docSubject = null
+
+      if (mongoReady) {
+        const docMatch = await Document.findOne({
+          $or: [
+            { name: { $regex: new RegExp(folderStem.replace(/_pdf$/i, ''), 'i') } },
+            { name: folderStem },
+          ],
+        })
+        if (docMatch) {
+          docSubject = docMatch.subject
+        }
+      }
+
+      // Infer subject from folder stem if not in database
+      if (!docSubject) {
+        if (/dsa/i.test(folderStem)) docSubject = 'DSA'
+        else if (/ml/i.test(folderStem)) docSubject = 'ML'
+      }
+
+      // Enforce role-based subject authorization before any disk lookup
+      if (docSubject) {
+        if (user.role === 'teacher') {
+          if (user.subject && user.subject.toUpperCase() !== docSubject.toUpperCase()) {
+            return response.status(403).json({
+              error: `Forbidden: Faculty member for ${user.subject} is not authorized to access ${docSubject} course materials.`,
+            })
+          }
+        } else if (user.role === 'student') {
+          const enrolled = (user.enrolledSubjects && user.enrolledSubjects.length > 0)
+            ? user.enrolledSubjects.map(s => s.toUpperCase())
+            : ['DSA', 'ML']
+          if (!enrolled.includes(docSubject.toUpperCase())) {
+            return response.status(403).json({
+              error: `Forbidden: Student is not enrolled in ${docSubject}.`,
+            })
+          }
+        }
+      }
+
+      // 4. Document / Diagram Existence Check
+      if (mongoReady) {
+        const docExists = await Document.findOne({
+          $or: [
+            { name: { $regex: new RegExp(folderStem.replace(/_pdf$/i, ''), 'i') } },
+            { name: folderStem },
+          ],
+        })
+        if (!docExists) {
+          const localFolder = path.join(uploadDir, 'images', folderStem)
+          const folderExists = await fs.stat(localFolder).catch(() => null)
+          if (!folderExists) {
+            return response.status(404).json({ error: 'Course diagram not found or document was removed.' })
+          }
+        }
+      }
+    }
+
     const imageUrl = `${pythonUrl}/images/${imagePath}`
-    
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
-    
+
     const upstream = await fetch(imageUrl, { signal: controller.signal })
     clearTimeout(timeoutId)
-    
+
     if (!upstream.ok) return response.status(upstream.status).end()
     const contentType = upstream.headers.get('content-type') || 'image/png'
     response.setHeader('Content-Type', contentType)

@@ -150,11 +150,11 @@ class DocumentProcessor:
         embeddings = self.model.encode(texts)
         return chunk_data, embeddings
 
-    def process_single_pdf(self, filepath):
+    def process_single_pdf(self, filepath, subject="DSA"):
         """
         Processes an individual PDF document:
         1. Extracts embedded images for multi-modal support.
-        2. Reads and indexes vectors into Pinecone (if available).
+        2. Reads and indexes vectors into Pinecone isolated by subject namespace.
         3. Automatically extracts topics and generates prerequisite JSON into prerequisites/.
         4. Updates the tracking file.
         """
@@ -183,7 +183,7 @@ class DocumentProcessor:
         # Multi-modal image extraction
         self.extract_images_from_pdf(filepath, pdf_file)
 
-        # Upsert vectors to Pinecone if updated or not yet indexed
+        # Upsert vectors to Pinecone isolated strictly to the subject namespace (DSA vs ML)
         if self.index is not None and processed_hashes.get(pdf_file) != file_hash:
             pages = self.read_pdf_by_page(filepath)
             chunk_data, embeddings = self.generate_embeddings_with_pages(pages)
@@ -193,20 +193,21 @@ class DocumentProcessor:
                 chunk = chunk_data[i]
                 page_nums = chunk["page_numbers"]
                 vectors_to_upsert.append((
-                    f"{pdf_file}_{i}",
+                    f"{subject}_{pdf_file}_{i}",
                     vector,
                     {
                         "sentence": chunk["text"],
                         "document": pdf_file,
+                        "subject": subject,
                         "chunk_index": i,
                         "page_numbers": json.dumps(page_nums)
                     }
                 ))
                 if len(vectors_to_upsert) >= 100:
-                    self.index.upsert(vectors=vectors_to_upsert)
+                    self.index.upsert(vectors=vectors_to_upsert, namespace=subject)
                     vectors_to_upsert = []
             if vectors_to_upsert:
-                self.index.upsert(vectors=vectors_to_upsert)
+                self.index.upsert(vectors=vectors_to_upsert, namespace=subject)
 
             processed_hashes[pdf_file] = file_hash
             try:
@@ -500,7 +501,7 @@ class DocumentProcessor:
             except Exception as e:
                 print(f"Warning: Could not save tracking file: {e}")
 
-    def delete_document(self, filename):
+    def delete_document(self, filename, subject=None):
         """Deletes a document from disk, tracking file, vector index, and extracted images."""
         # 1. Remove file from uploads directory
         filepath = os.path.join(self.pdf_dir, filename)
@@ -544,14 +545,23 @@ class DocumentProcessor:
             except Exception as e:
                 print(f"Warning: Could not remove prerequisite file {prereq_json_path}: {e}")
 
-        # 4. Delete vectors from Pinecone
+        # 4. Delete vectors from Pinecone scoped by subject namespace
         vectors_pruned = False
         if self.index:
-            # Delete by metadata so every chunk is removed, including chunks
-            # from older uploads that exceeded the previous ID limit.
-            self.index.delete(filter={"document": {"$eq": filename}})
-            vectors_pruned = True
-            print(f"Pruned vectors for {filename} from Pinecone index.")
+            try:
+                del_filter = {"document": {"$eq": filename}}
+                if subject:
+                    self.index.delete(filter=del_filter, namespace=subject)
+                else:
+                    for ns in ["DSA", "ML", ""]:
+                        try:
+                            self.index.delete(filter=del_filter, namespace=ns)
+                        except Exception:
+                            pass
+                vectors_pruned = True
+                print(f"Pruned vectors for {filename} from Pinecone index (subject: {subject}).")
+            except Exception as e:
+                print(f"Warning deleting Pinecone vectors: {e}")
 
         if not file_exists and not tracking_exists and not vectors_pruned:
             raise FileNotFoundError(f"Document '{filename}' was not found.")

@@ -1,7 +1,6 @@
 pdfplumber
 sentence-transformers
 pinecone
-nltk
 groq
 python-dotenv
 fastapi
