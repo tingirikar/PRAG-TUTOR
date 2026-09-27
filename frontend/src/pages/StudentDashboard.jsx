@@ -68,6 +68,7 @@ export default function StudentDashboard() {
   // Conversations state (MongoDB chat history)
   const [conversations, setConversations] = useState([])
   const [currentConversationId, setCurrentConversationId] = useState(null)
+  const [deletingConvId, setDeletingConvId] = useState(null)
 
   // Chat message & interaction state
   const [messages, setMessages] = useState([])
@@ -202,19 +203,25 @@ export default function StudentDashboard() {
     }
   }
 
-  // Delete a conversation from MongoDB
-  const deleteConversation = async (convId, e) => {
+  // Inline delete handlers (zero popups)
+  const confirmDelete = async (convId, e) => {
     e.stopPropagation()
-    if (!window.confirm('Are you sure you want to delete this conversation?')) return
     try {
       await fetch(`/api/conversations/${convId}`, { method: 'DELETE' })
       setConversations(prev => prev.filter(c => c._id !== convId))
+      setDeletingConvId(null)
       if (currentConversationId === convId) {
         startNewChat()
       }
     } catch (err) {
       console.error('Failed to delete conversation:', err)
+      setDeletingConvId(null)
     }
+  }
+
+  const cancelDelete = (e) => {
+    e.stopPropagation()
+    setDeletingConvId(null)
   }
 
   // Start a new chat thread for current subject
@@ -545,18 +552,51 @@ export default function StudentDashboard() {
               {conversations.map(conv => (
                 <div
                   key={conv._id}
-                  className={`chat-history-item ${currentConversationId === conv._id ? 'active' : ''}`}
-                  onClick={() => loadConversation(conv._id)}
+                  className={`chat-history-item ${currentConversationId === conv._id ? 'active' : ''} ${deletingConvId === conv._id ? 'confirming-delete' : ''}`}
+                  onClick={() => {
+                    if (deletingConvId === conv._id) return
+                    loadConversation(conv._id)
+                  }}
                 >
-                  <span className="chat-item-icon">💬</span>
-                  <span className="chat-item-title" title={conv.title}>{conv.title}</span>
-                  <button
-                    className="btn-delete-chat"
-                    onClick={(e) => deleteConversation(conv._id, e)}
-                    title="Delete Chat"
-                  >
-                    🗑️
-                  </button>
+                  {deletingConvId === conv._id ? (
+                    <div className="inline-delete-confirm" onClick={(e) => e.stopPropagation()}>
+                      <span className="inline-delete-text">Delete?</span>
+                      <div className="inline-delete-actions">
+                        <button
+                          type="button"
+                          className="btn-inline-confirm"
+                          onClick={(e) => confirmDelete(conv._id, e)}
+                          title="Confirm Delete"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-inline-cancel"
+                          onClick={cancelDelete}
+                          title="Cancel"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="chat-item-icon">💬</span>
+                      <span className="chat-item-title" title={conv.title}>{conv.title}</span>
+                      <button
+                        type="button"
+                        className="btn-delete-chat"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeletingConvId(conv._id)
+                        }}
+                        title="Delete Chat"
+                      >
+                        🗑️
+                      </button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

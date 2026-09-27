@@ -523,6 +523,75 @@
   background: var(--red-bg);
 }
 
+/* Inline Chat Item Delete Confirmation */
+.chat-history-item.confirming-delete {
+  background: var(--red-bg) !important;
+  border: 1px solid #f2bcba;
+}
+
+.inline-delete-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  animation: fadeIn 0.15s ease;
+}
+
+.inline-delete-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.inline-delete-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-inline-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.btn-inline-confirm:hover {
+  background: #912b25;
+  transform: scale(1.08);
+}
+
+.btn-inline-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-inline-cancel:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  transform: scale(1.08);
+}
+
 /* Chat top header additions */
 .chat-top-left {
   display: flex;
