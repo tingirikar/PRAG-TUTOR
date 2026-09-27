@@ -627,3 +627,7 @@
     box-shadow 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
 .dashboard button:active { transform: translateY(1px) scale(0.99); }
+
+.spin {
+  animation: spinProgress 0.8s linear infinite;
+}

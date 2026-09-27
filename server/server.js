@@ -515,9 +515,11 @@ app.get('/api/sample-questions', async (request, response) => {
   }
 })
 
-app.get('/api/prerequisites', async (_request, response) => {
+app.get('/api/prerequisites', async (request, response) => {
   try {
-    const result = await callPython('/rag/prerequisites', {
+    const subject = String(request.query?.subject || '').trim()
+    const queryStr = subject ? `?subject=${encodeURIComponent(subject)}` : ''
+    const result = await callPython(`/rag/prerequisites${queryStr}`, {
       timeout: 30000, // 30 second timeout for prerequisites
     })
     response.json(result)

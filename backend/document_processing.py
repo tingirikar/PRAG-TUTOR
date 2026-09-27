@@ -273,7 +273,7 @@ class DocumentProcessor:
             def prereq_progress(pct, stage):
                 notify(75 + int(pct * 0.23), stage)
             notify(75, "Analyzing topics & building prerequisite graph with AI...")
-            prereq_res = self.prereq_generator.generate_for_document(filepath, progress_callback=prereq_progress)
+            prereq_res = self.prereq_generator.generate_for_document(filepath, subject=subject, progress_callback=prereq_progress)
         except Exception as e:
             print(f"Warning: Could not generate prerequisites for {pdf_file}: {e}")
 

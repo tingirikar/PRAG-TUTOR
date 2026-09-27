@@ -569,12 +569,13 @@ CRITICAL RULES:
     def save_prerequisite_json(
         self,
         document_name: str,
-        prerequisite_graph: Dict[str, List[str]]
+        prerequisite_graph: Dict[str, List[str]],
+        subject: Optional[str] = None
     ) -> str:
         """
         Saves the prerequisite graph to prerequisites/<safe_name>_prerequisites.json.
         Preserves compatibility with the existing application schema (dict under 'prerequisites')
-        while also providing 'document' and structured 'topics' array.
+        while also providing 'document', 'subject', and structured 'topics' array.
         """
         safe_stem = get_safe_filename(document_name)
         filename = f"{safe_stem}_prerequisites.json"
@@ -588,6 +589,8 @@ CRITICAL RULES:
 
         payload = {
             "document": document_name,
+            "subject": (subject or "DSA").strip().upper(),
+            "topics_count": len(prerequisite_graph),
             "prerequisites": prerequisite_graph,
             "topics": topics_list
         }
@@ -601,7 +604,7 @@ CRITICAL RULES:
     # End-to-End Pipeline
     # ---------------------------------------------------------------------------
 
-    def generate_for_document(self, pdf_path: str, progress_callback=None) -> Dict[str, Any]:
+    def generate_for_document(self, pdf_path: str, subject: Optional[str] = None, progress_callback=None) -> Dict[str, Any]:
         """
         Executes the entire automated prerequisite generation pipeline:
         PDF -> Extraction -> Chunking -> Topic Identification -> Normalization ->
@@ -664,7 +667,7 @@ CRITICAL RULES:
 
         # 7. Save JSON
         notify(96, "Saving prerequisite curriculum structure...")
-        json_path = self.save_prerequisite_json(doc_basename, sanitized_graph)
+        json_path = self.save_prerequisite_json(doc_basename, sanitized_graph, subject=subject)
 
         notify(100, "Prerequisites ready.")
         return {

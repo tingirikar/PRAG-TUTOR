@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, Files, LogOut, UploadCloud, FileText, Check, X, Inbox } from 'lucide-react'
+import { Upload, Files, LogOut, UploadCloud, FileText, Check, X, Inbox, GitFork, Search, RefreshCw } from 'lucide-react'
 import './TeacherDashboard.css'
 
 const sanitizeFileName = (fileName) => {
@@ -26,6 +26,9 @@ export default function TeacherDashboard() {
 
   const [files, setFiles] = useState([])          // staged files
   const [documents, setDocuments] = useState([])   // "uploaded" documents
+  const [prerequisites, setPrerequisites] = useState({}) // subject prerequisites
+  const [loadingPrereqs, setLoadingPrereqs] = useState(false)
+  const [prereqSearch, setPrereqSearch] = useState('')
   const [activeTab, setActiveTab] = useState('upload')
   const [dragOver, setDragOver] = useState(false)
   const [deletingDocName, setDeletingDocName] = useState(null)
@@ -85,6 +88,21 @@ export default function TeacherDashboard() {
     }
   }
 
+  const fetchPrerequisites = async () => {
+    setLoadingPrereqs(true)
+    try {
+      const res = await fetch(`/api/prerequisites?subject=${encodeURIComponent(teacherSubject)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setPrerequisites(data.prerequisites || {})
+      }
+    } catch (err) {
+      console.error('Failed to fetch prerequisites:', err)
+    } finally {
+      setLoadingPrereqs(false)
+    }
+  }
+
   const executeDeleteDocument = async (name) => {
     try {
       const res = await fetch('/api/documents/delete', {
@@ -95,6 +113,7 @@ export default function TeacherDashboard() {
       setDeletingDocName(null)
       if (res.ok) {
         fetchDocuments()
+        fetchPrerequisites()
       } else {
         const err = await res.json().catch(() => ({}))
         alert(err.error || 'Failed to delete document')
@@ -108,6 +127,7 @@ export default function TeacherDashboard() {
 
   useEffect(() => {
     fetchDocuments()
+    fetchPrerequisites()
   }, [activeTab, teacherSubject])
 
   const uploadSingleFile = (fileObj) => {
@@ -187,6 +207,7 @@ export default function TeacherDashboard() {
             stage: 'Completed & Indexed'
           } : x))
           fetchDocuments()
+          fetchPrerequisites()
           resolve(true)
         } else {
           let errorMsg = `Server error (${xhr.status})`
@@ -265,6 +286,16 @@ export default function TeacherDashboard() {
           >
             <span className="nav-icon"><Files size={18} /></span>
             <span>Documents</span>
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'prerequisites' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('prerequisites')
+              fetchPrerequisites()
+            }}
+          >
+            <span className="nav-icon"><GitFork size={18} /></span>
+            <span>Prerequisites</span>
           </button>
         </nav>
 
@@ -429,40 +460,201 @@ export default function TeacherDashboard() {
                         <td>{doc.uploadedAt}</td>
                         <td><span className="badge badge-green">{doc.status}</span></td>
                         <td>
-                          {deletingDocName === doc.name ? (
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                              <span style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 600 }}>Delete?</span>
-                              <button
-                                type="button"
-                                onClick={() => executeDeleteDocument(doc.name)}
-                                title="Confirm Delete"
-                                style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
-                              >
-                                <Check size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeletingDocName(null)}
-                                title="Cancel"
-                                style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                          ) : (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                             <button
-                              className="btn-table-delete"
-                              onClick={() => setDeletingDocName(doc.name)}
-                              title="Delete document and remove from index"
+                              type="button"
+                              className="btn-secondary"
+                              style={{ padding: '4px 10px', fontSize: '0.8rem', borderRadius: '6px' }}
+                              onClick={() => {
+                                setActiveTab('prerequisites')
+                                fetchPrerequisites()
+                              }}
                             >
-                              Delete
+                              Syllabus
                             </button>
-                          )}
+                            {deletingDocName === doc.name ? (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 600 }}>Delete?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => executeDeleteDocument(doc.name)}
+                                  title="Confirm Delete"
+                                  style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                                >
+                                  <Check size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingDocName(null)}
+                                  title="Cancel"
+                                  style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                className="btn-table-delete"
+                                onClick={() => setDeletingDocName(doc.name)}
+                                title="Delete document and remove from index"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Prerequisites & Syllabus Graph Panel */}
+        {activeTab === 'prerequisites' && (
+          <div>
+            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h2>{teacherSubject} Syllabus & Prerequisites</h2>
+                <p>AI-extracted learning concepts and required prerequisite dependencies for {teacherSubject}</p>
+              </div>
+              <button
+                className="btn-secondary"
+                onClick={fetchPrerequisites}
+                disabled={loadingPrereqs}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '0.85rem' }}
+              >
+                <RefreshCw size={14} className={loadingPrereqs ? 'spin' : ''} />
+                Refresh Graph
+              </button>
+            </div>
+
+            {/* Metrics Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ padding: '16px 20px', background: 'var(--surface-1, #fff)', border: '1px solid var(--border, #e2e8f0)', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim, #64748b)', fontWeight: 600, textTransform: 'uppercase' }}>Total Topics</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent, #2547ff)', marginTop: '4px' }}>
+                  {Object.keys(prerequisites).length}
+                </div>
+              </div>
+              <div style={{ padding: '16px 20px', background: 'var(--surface-1, #fff)', border: '1px solid var(--border, #e2e8f0)', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim, #64748b)', fontWeight: 600, textTransform: 'uppercase' }}>Foundational (Entry Level)</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>
+                  {Object.values(prerequisites).filter(p => !p || p.length === 0).length}
+                </div>
+              </div>
+              <div style={{ padding: '16px 20px', background: 'var(--surface-1, #fff)', border: '1px solid var(--border, #e2e8f0)', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim, #64748b)', fontWeight: 600, textTransform: 'uppercase' }}>Intermediate & Advanced</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#6366f1', marginTop: '4px' }}>
+                  {Object.values(prerequisites).filter(p => p && p.length > 0).length}
+                </div>
+              </div>
+            </div>
+
+            {/* Search Filter */}
+            {Object.keys(prerequisites).length > 0 && (
+              <div style={{ position: 'relative', marginBottom: '20px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim, #64748b)' }} />
+                <input
+                  type="text"
+                  placeholder={`Search ${teacherSubject} topics...`}
+                  value={prereqSearch}
+                  onChange={(e) => setPrereqSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px 10px 38px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border, #e2e8f0)',
+                    background: 'var(--surface-1, #fff)',
+                    color: 'var(--text, #0f172a)',
+                    fontSize: '0.9rem',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+            )}
+
+            {Object.keys(prerequisites).length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon"><GitFork size={30} /></div>
+                <p>No prerequisites generated for {teacherSubject} yet.<br />Upload course notes or syllabus PDF in the <strong>Upload</strong> tab to automatically build the concept graph.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+                {Object.entries(prerequisites)
+                  .filter(([topic]) => !prereqSearch || topic.toLowerCase().includes(prereqSearch.toLowerCase()))
+                  .map(([topic, prereqs]) => {
+                    const isFoundational = !prereqs || prereqs.length === 0
+                    return (
+                      <div
+                        key={topic}
+                        style={{
+                          padding: '18px',
+                          background: 'var(--surface-1, #fff)',
+                          border: '1px solid var(--border, #e2e8f0)',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          gap: '12px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+                            <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--text, #0f172a)' }}>{topic}</h4>
+                            <span
+                              style={{
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                padding: '3px 8px',
+                                borderRadius: '999px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                background: isFoundational ? 'rgba(16, 185, 129, 0.12)' : 'rgba(99, 102, 241, 0.12)',
+                                color: isFoundational ? '#10b981' : '#6366f1',
+                                flexShrink: 0
+                              }}
+                            >
+                              {isFoundational ? 'Foundational' : `${prereqs.length} Prereq${prereqs.length > 1 ? 's' : ''}`}
+                            </span>
+                          </div>
+
+                          <div style={{ marginTop: '12px' }}>
+                            <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-dim, #64748b)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                              Required Prerequisites:
+                            </div>
+                            {isFoundational ? (
+                              <span style={{ fontSize: '0.82rem', color: 'var(--text-dim, #64748b)', fontStyle: 'italic' }}>
+                                None — entry-level core concept
+                              </span>
+                            ) : (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {prereqs.map((p, idx) => (
+                                  <span
+                                    key={idx}
+                                    style={{
+                                      fontSize: '0.78rem',
+                                      padding: '4px 9px',
+                                      borderRadius: '6px',
+                                      background: 'var(--surface-2, rgba(37, 71, 255, 0.08))',
+                                      color: 'var(--text, #0f172a)',
+                                      fontWeight: 500,
+                                      border: '1px solid var(--border, #e2e8f0)'
+                                    }}
+                                  >
+                                    ↳ {p}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
               </div>
             )}
           </div>

@@ -77,6 +77,7 @@ class ResponseGenerator:
         self.ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
 
         # Load prerequisites mapping from JSON file (source of truth)
+        self.prerequisites_by_subject: Dict[str, Dict[str, List[str]]] = {}
         self.prerequisites_data = self._load_prerequisites(prerequisites_file)
 
     def reload_prerequisites(self, prerequisites_file: Optional[str] = None):
@@ -87,14 +88,23 @@ class ResponseGenerator:
         self.prerequisites_data = self._load_prerequisites(prerequisites_file)
         return self.prerequisites_data
 
+    def get_prerequisites_for_subject(self, subject: Optional[str] = None) -> Dict[str, List[str]]:
+        """
+        Returns syllabus prerequisites strictly isolated to the given subject.
+        If subject is None, returns all loaded prerequisites.
+        """
+        if subject:
+            return self.prerequisites_by_subject.get(subject.strip().upper(), {})
+        return self.prerequisites_data
+
     def _load_prerequisites(self, prerequisites_file: Optional[str] = None) -> Dict[str, List[str]]:
         """
         Loads topic prerequisites from the JSON folder / file.
-        Does not hard-code any prerequisites in Python.
-        Aggregates all JSON prerequisite files if no specific file is given.
+        Partitions prerequisites strictly by subject dynamically (DSA, ML, or any new subject).
         """
         base_dir = os.path.dirname(os.path.abspath(__file__))
         cleaned: Dict[str, List[str]] = {}
+        by_subject: Dict[str, Dict[str, List[str]]] = {}
         target_files = []
 
         if prerequisites_file and os.path.exists(prerequisites_file):
@@ -127,7 +137,7 @@ class ResponseGenerator:
                         if isinstance(item, dict) and "topic" in item
                     }
                 elif isinstance(data, dict):
-                    raw_prereqs = {k: v for k, v in data.items() if k not in ("document", "topics")}
+                    raw_prereqs = {k: v for k, v in data.items() if k not in ("document", "topics", "subject", "topics_count")}
                 elif isinstance(data, list):
                     raw_prereqs = {
                         item["topic"]: item.get("prerequisites", [])
@@ -135,19 +145,40 @@ class ResponseGenerator:
                         if isinstance(item, dict) and "topic" in item
                     }
 
+                # Determine subject from JSON metadata or fallback to filename inference
+                file_subject = ""
+                if isinstance(data, dict) and data.get("subject"):
+                    file_subject = str(data["subject"]).strip().upper()
+                if not file_subject:
+                    f_lower = os.path.basename(file_path).lower()
+                    if "dsa" in f_lower or "data_structure" in f_lower:
+                        file_subject = "DSA"
+                    elif "ml" in f_lower or "machine_learning" in f_lower or "deep" in f_lower or "cse-3-1" in f_lower:
+                        file_subject = "ML"
+                    else:
+                        file_subject = "DSA"
+
+                if file_subject not in by_subject:
+                    by_subject[file_subject] = {}
+
                 for topic, prereqs in raw_prereqs.items():
                     topic_str = str(topic).strip()
                     if not topic_str:
                         continue
                     if isinstance(prereqs, list):
-                        cleaned[topic_str] = [str(p).strip() for p in prereqs if str(p).strip()]
+                        p_list = [str(p).strip() for p in prereqs if str(p).strip()]
                     elif prereqs is None:
-                        cleaned[topic_str] = []
+                        p_list = []
                     else:
-                        cleaned[topic_str] = [str(prereqs).strip()]
+                        p_list = [str(prereqs).strip()]
+
+                    cleaned[topic_str] = p_list
+                    by_subject[file_subject][topic_str] = p_list
+
             except Exception as e:
                 print(f"Warning: Could not load prerequisites from {file_path}: {e}")
 
+        self.prerequisites_by_subject = by_subject
         return cleaned
 
     def identify_topic_from_rag(
@@ -569,10 +600,17 @@ class ResponseGenerator:
     def generate_sample_questions(self, seed: Optional[str] = None, subject: Optional[str] = None) -> List[Dict[str, str]]:
         """Generate course questions grounded strictly in uploaded syllabus topics.
         Never hallucinate questions or return fake fallbacks when no materials exist.
+        Isolated strictly by subject (DSA, ML, or any new subject).
         """
-        all_topics = list(self.prerequisites_data.keys())
+        subj_key = (subject or "").strip().upper()
+        if subj_key:
+            subj_topics_map = self.prerequisites_by_subject.get(subj_key, {})
+            all_topics = list(subj_topics_map.keys())
+        else:
+            all_topics = list(self.prerequisites_data.keys())
+
         if not all_topics:
-            # No course materials uploaded: strictly return empty list. No fake data!
+            # No course materials uploaded for this subject: strictly return empty list. No fake data!
             return []
 
         import random
@@ -581,9 +619,10 @@ class ResponseGenerator:
         selected = rng.sample(all_topics, sample_size)
         topics = ", ".join(selected)
 
+        course_label = f"{subj_key} course" if subj_key else "course"
         prompt = (
-            "Create exactly six fresh, diverse study questions for an educational tutor dashboard. "
-            f"Select from these available course topics where relevant: {topics}. "
+            f"Create exactly six fresh, diverse study questions for a {course_label} educational tutor dashboard. "
+            f"Select from these available {course_label} topics where relevant: {topics}. "
             f"Seed: {seed or 'first-load'}. Vary the difficulty levels across beginner, intermediate, and expert. "
             "Return ONLY a valid JSON array of 6 objects. Each object must have exactly these keys: "
             '{"topic": "<topic name>", "question": "<question text>", "level": "<beginner|intermediate|expert>"}.'

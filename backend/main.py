@@ -127,12 +127,14 @@ def health() -> Dict[str, Any]:
 
 
 @app.get("/rag/prerequisites")
-def prerequisites() -> Dict[str, Any]:
+def prerequisites(subject: Optional[str] = Query(default=None)) -> Dict[str, Any]:
     if not response_generator:
         raise HTTPException(status_code=503, detail="Response generator is unavailable.")
+    data = response_generator.get_prerequisites_for_subject(subject)
     return {
-        "prerequisites": response_generator.prerequisites_data,
-        "count": len(response_generator.prerequisites_data),
+        "subject": subject,
+        "prerequisites": data,
+        "count": len(data),
     }
 
 
