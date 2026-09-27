@@ -50,15 +50,33 @@ class DocumentProcessor:
             self.index = None  
 
     def read_pdf(self, pdf_file):
+        """Reads a PDF file and returns its text content with PyMuPDF acceleration."""
+        if fitz is not None:
+            try:
+                doc = fitz.open(pdf_file)
+                text = "".join(page.get_text() or "" for page in doc)
+                doc.close()
+                return text
+            except Exception as e:
+                print(f"[Warning] PyMuPDF text read failed ({e}), falling back to pdfplumber...")
         text_content = ""
         with pdfplumber.open(pdf_file) as pdf:
             for page in pdf.pages:
-                text_content += page.extract_text()
+                text_content += page.extract_text() or ""
         return text_content
 
     def read_pdf_by_page(self, pdf_file):
-        """Reads a PDF and returns a list of (page_number, page_text) tuples."""
+        """Reads a PDF and returns a list of (page_number, page_text) tuples with PyMuPDF acceleration."""
         pages = []
+        if fitz is not None:
+            try:
+                doc = fitz.open(pdf_file)
+                for page_num, page in enumerate(doc):
+                    pages.append((page_num, page.get_text() or ""))
+                doc.close()
+                return pages
+            except Exception as e:
+                print(f"[Warning] PyMuPDF page extraction failed ({e}), falling back to pdfplumber...")
         with pdfplumber.open(pdf_file) as pdf:
             for page_num, page in enumerate(pdf.pages):
                 text = page.extract_text() or ""
@@ -139,16 +157,27 @@ class DocumentProcessor:
         embeddings = self.model.encode(chunks)
         return chunks, embeddings
 
-    def generate_embeddings_with_pages(self, pages):
-        """Generate embeddings with page tracking for multi-modal support."""
+    def generate_embeddings_with_pages(self, pages, progress_callback=None):
+        """Generate embeddings with page tracking for multi-modal support, batched with progress."""
         chunk_data = self.chunk_text_with_pages(pages)
         if not chunk_data:
             full_text = " ".join(text for _, text in pages)
             chunk_data = [{"text": full_text[:500] if full_text.strip() else "General course content", "page_numbers": [0]}]
 
         texts = [c["text"] for c in chunk_data]
-        embeddings = self.model.encode(texts)
-        return chunk_data, embeddings
+        total_texts = len(texts)
+        batch_size = 32
+        all_embeddings = []
+
+        for i in range(0, total_texts, batch_size):
+            batch = texts[i:i + batch_size]
+            emb_batch = self.model.encode(batch)
+            all_embeddings.extend(emb_batch)
+            if progress_callback:
+                done_count = min(i + batch_size, total_texts)
+                progress_callback(done_count, total_texts)
+
+        return chunk_data, all_embeddings
 
     def process_single_pdf(self, filepath, subject="DSA", progress_callback=None):
         """
@@ -196,10 +225,17 @@ class DocumentProcessor:
         if self.index is not None and processed_hashes.get(pdf_file) != file_hash:
             notify(30, "Reading pages & extracting text content...")
             pages = self.read_pdf_by_page(filepath)
+
+            def emb_progress(done, total):
+                pct = 45 + int(14 * (done / max(total, 1)))
+                notify(pct, f"Computing embeddings ({done}/{total} chunks)...")
+
             notify(45, f"Chunking text & computing embeddings for {len(pages)} pages...")
-            chunk_data, embeddings = self.generate_embeddings_with_pages(pages)
+            chunk_data, embeddings = self.generate_embeddings_with_pages(pages, progress_callback=emb_progress)
+
             notify(60, f"Upserting {len(embeddings)} vectors into Pinecone ({subject})...")
             vectors_to_upsert = []
+            total_vecs = len(embeddings)
             for i, embedding in enumerate(embeddings):
                 vector = embedding.tolist()
                 chunk = chunk_data[i]
@@ -218,8 +254,11 @@ class DocumentProcessor:
                 if len(vectors_to_upsert) >= 100:
                     self.index.upsert(vectors=vectors_to_upsert, namespace=subject)
                     vectors_to_upsert = []
+                    upsert_pct = 60 + int(14 * ((i + 1) / max(total_vecs, 1)))
+                    notify(upsert_pct, f"Uploaded {i + 1}/{total_vecs} vectors to Pinecone...")
             if vectors_to_upsert:
                 self.index.upsert(vectors=vectors_to_upsert, namespace=subject)
+                notify(74, f"Uploaded all {total_vecs} vectors to Pinecone")
 
             processed_hashes[pdf_file] = file_hash
             try:
@@ -231,8 +270,10 @@ class DocumentProcessor:
         # Automatically generate prerequisite JSON
         prereq_res = {}
         try:
+            def prereq_progress(pct, stage):
+                notify(75 + int(pct * 0.23), stage)
             notify(75, "Analyzing topics & building prerequisite graph with AI...")
-            prereq_res = self.prereq_generator.generate_for_document(filepath)
+            prereq_res = self.prereq_generator.generate_for_document(filepath, progress_callback=prereq_progress)
         except Exception as e:
             print(f"Warning: Could not generate prerequisites for {pdf_file}: {e}")
 

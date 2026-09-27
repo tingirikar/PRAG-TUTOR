@@ -141,10 +141,14 @@ export default function TeacherDashboard() {
       // 2. Stream real AI pipeline progress from Express SSE response (20% - 100%)
       let seenIndex = 0
       xhr.onprogress = () => {
-        const text = xhr.responseText.slice(seenIndex)
-        seenIndex = xhr.responseText.length
+        const fullText = xhr.responseText
+        const chunk = fullText.slice(seenIndex)
+        const lastNewline = chunk.lastIndexOf('\n')
+        if (lastNewline === -1) return
+        const processable = chunk.slice(0, lastNewline)
+        seenIndex += lastNewline + 1
 
-        const lines = text.split('\n')
+        const lines = processable.split('\n')
         for (const line of lines) {
           const trimmed = line.trim()
           if (trimmed.startsWith('data: ')) {

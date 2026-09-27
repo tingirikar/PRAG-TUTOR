@@ -6,6 +6,14 @@ from typing import Dict, List, Set, Optional, Tuple, Any
 from groq import Groq
 import pdfplumber
 
+try:
+    import pymupdf as fitz
+except ImportError:
+    try:
+        import fitz
+    except ImportError:
+        fitz = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -107,10 +115,25 @@ class PrerequisiteGenerator:
 
     def extract_text_from_pdf(self, pdf_path: str) -> List[Dict[str, Any]]:
         """
-        Extracts and cleans text page-by-page from a PDF using pdfplumber.
+        Extracts and cleans text page-by-page from a PDF.
+        Uses high-speed PyMuPDF first, falling back to pdfplumber if needed.
         Returns a list of page dicts: [{"page": 1, "text": "..."}, ...].
         """
         pages = []
+        if fitz is not None:
+            try:
+                doc = fitz.open(pdf_path)
+                for idx, page in enumerate(doc, start=1):
+                    raw = page.get_text() or ""
+                    cleaned = clean_extracted_text(raw)
+                    if cleaned.strip():
+                        pages.append({"page": idx, "text": cleaned})
+                doc.close()
+                if pages:
+                    return pages
+            except Exception as e:
+                logger.warning(f"PyMuPDF text extraction failed ({e}), falling back to pdfplumber...")
+
         with pdfplumber.open(pdf_path) as pdf:
             for idx, page in enumerate(pdf.pages, start=1):
                 raw = page.extract_text() or ""
@@ -184,7 +207,7 @@ class PrerequisiteGenerator:
                         {"role": "user", "content": prompt}
                     ],
                     temperature=temperature,
-                    max_tokens=2500,
+                    max_tokens=4096,
                 )
                 raw_content = response.choices[0].message.content or ""
                 # Strip think blocks
@@ -224,9 +247,23 @@ class PrerequisiteGenerator:
         repaired = re.sub(r',\s*([\}\]])', r'\1', text)
         try:
             return json.loads(repaired)
-        except Exception as e:
-            logger.warning(f"Failed to parse JSON response: {e}")
-            return None
+        except Exception:
+            pass
+
+        # Attempt repair for truncated JSON by closing open quotes and braces
+        try:
+            last_quote = text.rfind('"')
+            if last_quote > 0:
+                trimmed = text[:last_quote + 1]
+                open_braces = max(0, trimmed.count('{') - trimmed.count('}'))
+                open_brackets = max(0, trimmed.count('[') - trimmed.count(']'))
+                repaired_trunc = trimmed + ("]" * open_brackets) + ("}" * open_braces)
+                return json.loads(repaired_trunc)
+        except Exception:
+            pass
+
+        logger.warning(f"Failed to parse JSON response safely.")
+        return None
 
     # ---------------------------------------------------------------------------
     # Step 1: Candidate Topic Extraction & Filtering
@@ -316,6 +353,10 @@ Return format:
                 normalized_map[lower] = norm
 
         final_topics = list(normalized_map.values())
+        # Cap candidate topics to top 35 core concepts to prevent output token explosion
+        if len(final_topics) > 35:
+            # Sort by length and specificity, retaining top 35
+            final_topics = sorted(final_topics, key=lambda t: (len(t.split()), len(t)), reverse=True)[:35]
         return sorted(final_topics)
 
     # ---------------------------------------------------------------------------
@@ -560,18 +601,26 @@ CRITICAL RULES:
     # End-to-End Pipeline
     # ---------------------------------------------------------------------------
 
-    def generate_for_document(self, pdf_path: str) -> Dict[str, Any]:
+    def generate_for_document(self, pdf_path: str, progress_callback=None) -> Dict[str, Any]:
         """
         Executes the entire automated prerequisite generation pipeline:
         PDF -> Extraction -> Chunking -> Topic Identification -> Normalization ->
         Prerequisite Generation -> Cycle Detection & Validation -> JSON Output.
         """
+        def notify(pct, msg):
+            if progress_callback:
+                try:
+                    progress_callback(pct, msg)
+                except Exception:
+                    pass
+
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
         doc_basename = os.path.basename(pdf_path)
 
         # 1. Extract text from PDF
+        notify(5, "Extracting document pages for curriculum analysis...")
         pages = self.extract_text_from_pdf(pdf_path)
         if not pages:
             return {
@@ -585,12 +634,16 @@ CRITICAL RULES:
         chunks = self.chunk_pages(pages)
 
         # 3. Extract candidate topics from each chunk
+        total_chunks = len(chunks)
         candidate_topics: List[str] = []
-        for chunk in chunks:
+        for c_idx, chunk in enumerate(chunks):
+            chunk_pct = 15 + int(35 * ((c_idx + 1) / max(total_chunks, 1)))
+            notify(chunk_pct, f"Analyzing concepts (section {c_idx+1}/{total_chunks})...")
             topics = self.extract_candidate_topics_from_chunk(chunk)
             candidate_topics.extend(topics)
 
         # 4. Normalize & deduplicate topics
+        notify(55, "Normalizing and filtering learning topics...")
         normalized_topics = self.deduplicate_and_filter_topics(candidate_topics)
         if not normalized_topics:
             return {
@@ -601,15 +654,19 @@ CRITICAL RULES:
             }
 
         # 5. Generate prerequisite relationships
+        notify(70, f"Inferring prerequisites for {len(normalized_topics)} core topics with AI...")
         doc_summary = f"{doc_basename} ({len(pages)} pages)"
         raw_graph = self.generate_prerequisite_graph(normalized_topics, doc_summary=doc_summary)
 
         # 6. Validate, break cycles, and remove redundancies
+        notify(88, "Validating graph & resolving cyclic dependencies...")
         sanitized_graph = self.validate_and_sanitize_graph(raw_graph, normalized_topics)
 
         # 7. Save JSON
+        notify(96, "Saving prerequisite curriculum structure...")
         json_path = self.save_prerequisite_json(doc_basename, sanitized_graph)
 
+        notify(100, "Prerequisites ready.")
         return {
             "status": "success",
             "document": doc_basename,
