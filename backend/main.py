@@ -59,6 +59,11 @@ class IndexRequest(BaseModel):
     subject: Optional[str] = "DSA"
 
 
+class PrerequisiteSyncRequest(BaseModel):
+    subject: str = Field(min_length=1)
+    prerequisites: Dict[str, List[str]] = Field(default_factory=dict)
+
+
 print("Initializing Python RAG service...")
 query_processor = QueryProcessor()
 
@@ -184,6 +189,7 @@ async def query(request: QueryRequest) -> Dict[str, Any]:
                 user_question=request.query,
                 topic=getattr(result, "topic", None),
                 mode="notes",
+                subject=request.subject,
             )
 
         return {
@@ -266,6 +272,7 @@ def images(request: ImageRequest) -> Dict[str, Any]:
             user_question=request.query,
             topic=request.topic or None,
             mode=request.mode,
+            subject=request.subject,
         )
         return {"images": result}
     except Exception as error:
@@ -387,4 +394,16 @@ def reload_prerequisites() -> Dict[str, Any]:
         "status": "ok",
         "count": len(prereqs),
         "prerequisites": prereqs,
+    }
+
+
+@app.post("/rag/prerequisites/sync")
+def sync_prerequisites(request: PrerequisiteSyncRequest) -> Dict[str, Any]:
+    if not response_generator:
+        raise HTTPException(status_code=503, detail="Response generator is unavailable.")
+    count = response_generator.set_prerequisites_for_subject(request.subject, request.prerequisites)
+    return {
+        "status": "ok",
+        "subject": request.subject,
+        "count": count,
     }

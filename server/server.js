@@ -94,49 +94,142 @@ const conversationSchema = new mongoose.Schema({
 const Conversation = mongoose.models.Conversation || mongoose.model('Conversation', conversationSchema)
 
 const documentSchema = new mongoose.Schema({
-  name: { type: String, required: true, unique: true },
-  subject: { type: String, default: 'DSA' },
+  name: { type: String, required: true },
+  subject: { type: String, required: true, default: 'DSA', index: true },
   size: { type: Number, required: true },
   uploadedAt: { type: Date, default: Date.now },
   status: { type: String, default: 'Uploaded' },
 }, { versionKey: false })
+documentSchema.index({ subject: 1, name: 1 }, { unique: true })
 const Document = mongoose.models.Document || mongoose.model('Document', documentSchema)
+
+const prerequisiteSchema = new mongoose.Schema({
+  subject: { type: String, required: true, index: true },
+  topic: { type: String, required: true },
+  prerequisites: { type: [String], default: [] },
+  isCustom: { type: Boolean, default: false },
+  document: { type: String, default: 'Manual' },
+  createdBy: { type: String, default: 'system' },
+}, { timestamps: true })
+
+prerequisiteSchema.index({ subject: 1, topic: 1 }, { unique: true })
+const Prerequisite = mongoose.models.Prerequisite || mongoose.model('Prerequisite', prerequisiteSchema)
 
 async function seedDatabase() {
   try {
-    const userCount = await User.countDocuments()
-    if (userCount === 0) {
-      console.log('Seeding initial student and teacher accounts...')
-      await User.insertMany([
-        { username: 'student', password: 'student123', name: 'Alex (Student)', role: 'student', enrolledSubjects: ['DSA', 'ML'] },
-        { username: 'teacher_dsa', password: 'dsa123', name: 'Dr. Sarah (DSA Faculty)', role: 'teacher', subject: 'DSA' },
-        { username: 'teacher_ml', password: 'ml123', name: 'Prof. Alan (ML Faculty)', role: 'teacher', subject: 'ML' },
-      ])
-      console.log('Accounts seeded successfully.')
+    // Drop old global unique index on name if it exists to allow compound subject+name uniqueness
+    try {
+      await Document.collection.dropIndex('name_1').catch(() => {})
+      await Document.syncIndexes().catch(() => {})
+    } catch {}
+
+    const initialTeachers = [
+      { username: 'student', password: 'student123', name: 'Alex (Student)', role: 'student', enrolledSubjects: ['DSA', 'ML', 'OS', 'DBMS', 'NETWORKS'] },
+      { username: 'teacher_dsa', password: 'dsa123', name: 'Dr. Sarah (DSA Faculty)', role: 'teacher', subject: 'DSA' },
+      { username: 'teacher_ml', password: 'ml123', name: 'Prof. Alan (ML Faculty)', role: 'teacher', subject: 'ML' },
+      { username: 'teacher_os', password: 'os123', name: 'Dr. Robert (OS Faculty)', role: 'teacher', subject: 'OS' },
+      { username: 'teacher_dbms', password: 'dbms123', name: 'Prof. Maya (DBMS Faculty)', role: 'teacher', subject: 'DBMS' },
+      { username: 'teacher_networks', password: 'networks123', name: 'Dr. Kevin (Networks Faculty)', role: 'teacher', subject: 'NETWORKS' },
+    ]
+    for (const u of initialTeachers) {
+      await User.findOneAndUpdate({ username: u.username }, { $setOnInsert: u }, { upsert: true }).catch(() => {})
     }
 
-    const subjectCount = await Subject.countDocuments()
-    if (subjectCount === 0) {
-      console.log('Seeding initial subjects (DSA & ML)...')
-      await Subject.insertMany([
-        {
-          code: 'DSA',
-          name: 'Data Structures & Algorithms',
-          description: 'Master linear & non-linear structures, recursion, trees, graphs, sorting, and complexity analysis.',
-          icon: '📘',
-          teacherUsername: 'teacher_dsa',
-          teacherName: 'Dr. Sarah (DSA Faculty)'
-        },
-        {
-          code: 'ML',
-          name: 'Machine Learning',
-          description: 'Explore supervised & unsupervised learning, cost functions, gradient descent, neural networks, and evaluation.',
-          icon: '🤖',
-          teacherUsername: 'teacher_ml',
-          teacherName: 'Prof. Alan (ML Faculty)'
-        },
-      ])
-      console.log('Subjects seeded successfully.')
+    const initialSubjects = [
+      {
+        code: 'DSA',
+        name: 'Data Structures & Algorithms',
+        description: 'Master linear & non-linear structures, recursion, trees, graphs, sorting, and complexity analysis.',
+        icon: '📘',
+        teacherUsername: 'teacher_dsa',
+        teacherName: 'Dr. Sarah (DSA Faculty)'
+      },
+      {
+        code: 'ML',
+        name: 'Machine Learning',
+        description: 'Explore supervised & unsupervised learning, cost functions, gradient descent, neural networks, and evaluation.',
+        icon: '🤖',
+        teacherUsername: 'teacher_ml',
+        teacherName: 'Prof. Alan (ML Faculty)'
+      },
+      {
+        code: 'OS',
+        name: 'Operating Systems',
+        description: 'Process management, concurrency, memory paging, file systems, scheduling, and system calls.',
+        icon: '💻',
+        teacherUsername: 'teacher_os',
+        teacherName: 'Dr. Robert (OS Faculty)'
+      },
+      {
+        code: 'DBMS',
+        name: 'Database Management Systems',
+        description: 'Relational algebra, SQL, normalization (1NF-BCNF), indexing, transactions, and ACID properties.',
+        icon: '🗄️',
+        teacherUsername: 'teacher_dbms',
+        teacherName: 'Prof. Maya (DBMS Faculty)'
+      },
+      {
+        code: 'NETWORKS',
+        name: 'Computer Networks',
+        description: 'OSI & TCP/IP stack, routing protocols, flow control, congestion avoidance, sockets, and network security.',
+        icon: '🌐',
+        teacherUsername: 'teacher_networks',
+        teacherName: 'Dr. Kevin (Networks Faculty)'
+      },
+    ]
+    for (const s of initialSubjects) {
+      await Subject.findOneAndUpdate({ code: s.code }, { $setOnInsert: s }, { upsert: true }).catch(() => {})
+    }
+
+    const prereqCount = await Prerequisite.countDocuments()
+    if (prereqCount === 0) {
+      console.log('Seeding initial prerequisites into MongoDB from backend/prerequisites JSON files...')
+      const prereqsDir = path.resolve(__dirname, '..', 'backend', 'prerequisites')
+      try {
+        const files = await fs.readdir(prereqsDir)
+        const toInsert = []
+        const seen = new Set()
+        for (const file of files) {
+          if (!file.endsWith('.json')) continue
+          try {
+            const raw = await fs.readFile(path.join(prereqsDir, file), 'utf8')
+            const parsed = JSON.parse(raw)
+            let fileSubject = (parsed.subject || '').toUpperCase()
+            if (!fileSubject) {
+              const fl = file.toLowerCase()
+              if (fl.includes('dsa') || fl.includes('data_structure')) fileSubject = 'DSA'
+              else if (fl.includes('ml') || fl.includes('cse-3-1')) fileSubject = 'ML'
+              else fileSubject = 'DSA'
+            }
+            const docName = parsed.document || file.replace('_prerequisites.json', '.pdf')
+            const pMap = parsed.prerequisites || (parsed.topics ? Object.fromEntries(parsed.topics.map(t => [t.topic, t.prerequisites || []])) : {})
+            for (const [topic, prereqs] of Object.entries(pMap)) {
+              const topicStr = String(topic).trim()
+              if (!topicStr) continue
+              const key = `${fileSubject}:::${topicStr}`
+              if (!seen.has(key)) {
+                seen.add(key)
+                toInsert.push({
+                  subject: fileSubject,
+                  topic: topicStr,
+                  prerequisites: Array.isArray(prereqs) ? prereqs.map(p => String(p).trim()).filter(Boolean) : [],
+                  document: docName,
+                  isCustom: false,
+                  createdBy: 'seed',
+                })
+              }
+            }
+          } catch (e) {
+            console.error(`Error reading ${file} for seeding:`, e.message)
+          }
+        }
+        if (toInsert.length > 0) {
+          await Prerequisite.insertMany(toInsert, { ordered: false }).catch(() => {})
+          console.log(`Successfully seeded ${toInsert.length} prerequisites into MongoDB.`)
+        }
+      } catch (err) {
+        console.warn('Notice: Prerequisites directory read notice:', err.message)
+      }
     }
   } catch (err) {
     console.warn('Seeding error:', err.message)
@@ -219,6 +312,47 @@ async function callPython(endpoint, options = {}) {
       throw timeoutError
     }
     throw error
+  }
+}
+
+async function syncPrerequisitesToPython(subject) {
+  try {
+    const subj = String(subject || 'DSA').trim().toUpperCase()
+    if (!mongoReady) return
+
+    const records = await Prerequisite.find({ subject: subj }).lean()
+    const prereqMap = {}
+    for (const r of records) {
+      prereqMap[r.topic] = r.prerequisites || []
+    }
+
+    // 1. Live Python in-memory sync
+    await callPython('/rag/prerequisites/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: subj,
+        prerequisites: prereqMap,
+      }),
+      timeout: 10000,
+    }).catch(err => {
+      console.log(`[Notice] Python sync notice for ${subj}:`, err.message)
+    })
+
+    // 2. Persistent backup on disk
+    try {
+      const prereqsDir = path.resolve(__dirname, '..', 'backend', 'prerequisites')
+      await fs.mkdir(prereqsDir, { recursive: true })
+      const backupPath = path.join(prereqsDir, `${subj}_custom_prerequisites.json`)
+      await fs.writeFile(backupPath, JSON.stringify({
+        subject: subj,
+        document: `${subj}_Curriculum.pdf`,
+        topics_count: Object.keys(prereqMap).length,
+        prerequisites: prereqMap,
+      }, null, 2), 'utf8')
+    } catch {}
+  } catch (err) {
+    console.error(`[Error] syncPrerequisitesToPython(${subject}) failed:`, err.message)
   }
 }
 
@@ -327,6 +461,41 @@ app.get('/api/subjects', async (_request, response) => {
         }
       ]
     })
+  } catch (err) {
+    response.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/subjects', async (request, response) => {
+  try {
+    const { code, name, description, icon, teacherUsername, teacherName } = request.body || {}
+    if (!code || !name) {
+      return response.status(400).json({ error: 'Subject code and name are required.' })
+    }
+    const cleanCode = String(code).trim().toUpperCase()
+    if (mongoReady) {
+      const subjectDoc = await Subject.findOneAndUpdate(
+        { code: cleanCode },
+        {
+          code: cleanCode,
+          name: String(name).trim(),
+          description: String(description || '').trim(),
+          icon: String(icon || '📚').trim(),
+          teacherUsername: String(teacherUsername || '').trim(),
+          teacherName: String(teacherName || '').trim(),
+        },
+        { upsert: true, new: true }
+      )
+      if (teacherUsername) {
+        await User.findOneAndUpdate(
+          { username: String(teacherUsername).trim() },
+          { subject: cleanCode, role: 'teacher', ...(teacherName ? { name: String(teacherName).trim() } : {}) },
+          { upsert: false }
+        ).catch(() => {})
+      }
+      return response.status(201).json({ success: true, subject: subjectDoc })
+    }
+    return response.status(503).json({ error: 'Database is not ready.' })
   } catch (err) {
     response.status(500).json({ error: err.message })
   }
@@ -528,16 +697,153 @@ app.get('/api/sample-questions', async (request, response) => {
   }
 })
 
+// --- Prerequisites API (MongoDB-backed with live Python sync) ---
+
 app.get('/api/prerequisites', async (request, response) => {
   try {
-    const subject = String(request.query?.subject || '').trim()
+    const subject = String(request.query?.subject || 'DSA').trim().toUpperCase()
+    if (mongoReady) {
+      const records = await Prerequisite.find({ subject }).sort({ topic: 1 }).lean()
+      if (records && records.length > 0) {
+        const prereqMap = {}
+        for (const r of records) {
+          prereqMap[r.topic] = r.prerequisites || []
+        }
+        return response.json({
+          subject,
+          prerequisites: prereqMap,
+          count: records.length,
+          records: records.map(r => ({
+            id: r._id,
+            topic: r.topic,
+            prerequisites: r.prerequisites,
+            isCustom: r.isCustom,
+            document: r.document,
+          })),
+        })
+      }
+    }
+    // Fallback to Python if MongoDB not ready or has no records
     const queryStr = subject ? `?subject=${encodeURIComponent(subject)}` : ''
-    const result = await callPython(`/rag/prerequisites${queryStr}`, {
-      timeout: 30000, // 30 second timeout for prerequisites
-    })
+    const result = await callPython(`/rag/prerequisites${queryStr}`, { timeout: 30000 })
     response.json(result)
   } catch (error) {
-    response.status(503).json({ error: error.message })
+    response.status(error.status || 500).json({ error: error.message })
+  }
+})
+
+app.post('/api/prerequisites', async (request, response) => {
+  try {
+    const { subject, topic, prerequisites, createdBy } = request.body || {}
+    if (!topic || !String(topic).trim()) {
+      return response.status(400).json({ error: 'Topic name is required.' })
+    }
+    const subj = String(subject || 'DSA').trim().toUpperCase()
+    const topicName = String(topic).trim()
+    const prereqList = Array.isArray(prerequisites)
+      ? prerequisites.map(p => String(p).trim()).filter(Boolean)
+      : []
+
+    if (mongoReady) {
+      const doc = await Prerequisite.findOneAndUpdate(
+        { subject: subj, topic: topicName },
+        {
+          subject: subj,
+          topic: topicName,
+          prerequisites: prereqList,
+          isCustom: true,
+          createdBy: createdBy || 'teacher',
+        },
+        { upsert: true, new: true }
+      )
+
+      await syncPrerequisitesToPython(subj)
+
+      return response.status(201).json({
+        success: true,
+        message: `Topic '${topicName}' added to ${subj}.`,
+        record: {
+          id: doc._id,
+          topic: doc.topic,
+          prerequisites: doc.prerequisites,
+          isCustom: doc.isCustom,
+        },
+      })
+    }
+    return response.status(503).json({ error: 'Database is not ready.' })
+  } catch (error) {
+    response.status(500).json({ error: error.message })
+  }
+})
+
+app.put('/api/prerequisites', async (request, response) => {
+  try {
+    const { subject, topic, prerequisites } = request.body || {}
+    if (!topic || !String(topic).trim()) {
+      return response.status(400).json({ error: 'Topic name is required.' })
+    }
+    const subj = String(subject || 'DSA').trim().toUpperCase()
+    const topicName = String(topic).trim()
+    const prereqList = Array.isArray(prerequisites)
+      ? prerequisites.map(p => String(p).trim()).filter(Boolean)
+      : []
+
+    if (mongoReady) {
+      const doc = await Prerequisite.findOneAndUpdate(
+        { subject: subj, topic: topicName },
+        { prerequisites: prereqList, isCustom: true },
+        { new: true }
+      )
+
+      if (!doc) {
+        return response.status(404).json({ error: `Topic '${topicName}' not found in ${subj}.` })
+      }
+
+      await syncPrerequisitesToPython(subj)
+
+      return response.json({
+        success: true,
+        message: `Prerequisites for '${topicName}' updated.`,
+        record: {
+          id: doc._id,
+          topic: doc.topic,
+          prerequisites: doc.prerequisites,
+          isCustom: doc.isCustom,
+        },
+      })
+    }
+    return response.status(503).json({ error: 'Database is not ready.' })
+  } catch (error) {
+    response.status(500).json({ error: error.message })
+  }
+})
+
+app.delete('/api/prerequisites', async (request, response) => {
+  try {
+    const subject = String(request.body?.subject || request.query?.subject || 'DSA').trim().toUpperCase()
+    const topic = String(request.body?.topic || request.query?.topic || '').trim()
+
+    if (!topic) {
+      return response.status(400).json({ error: 'Topic name is required to delete.' })
+    }
+
+    if (mongoReady) {
+      const deleted = await Prerequisite.findOneAndDelete({ subject, topic })
+      if (!deleted) {
+        return response.status(404).json({ error: `Topic '${topic}' not found in ${subject}.` })
+      }
+
+      await syncPrerequisitesToPython(subject)
+
+      return response.json({
+        success: true,
+        message: `Topic '${topic}' deleted from ${subject}.`,
+        deletedTopic: topic,
+      })
+    }
+    return response.status(503).json({ error: 'Database is not ready.' })
+  } catch (error) {
+    response.status(500).json({ error: error.message })
   }
 })
 
@@ -563,7 +869,7 @@ app.post('/api/upload', upload.fields([{ name: 'file', maxCount: 20 }, { name: '
     try {
       if (mongoReady) {
         await Promise.all(files.map(file => Document.findOneAndUpdate(
-          { name: file.filename },
+          { name: file.filename, subject },
           { name: file.filename, size: file.size, subject, uploadedAt: new Date(), status: 'Uploaded' },
           { upsert: true, new: true },
         )))
@@ -607,7 +913,7 @@ app.post('/api/upload', upload.fields([{ name: 'file', maxCount: 20 }, { name: '
         }
       }
 
-      if (mongoReady) await Document.updateMany({ name: { $in: filenames } }, { status: 'Indexed' })
+      if (mongoReady) await Document.updateMany({ name: { $in: filenames }, subject }, { status: 'Indexed' })
       sendEvent({ percent: 100, stage: 'Completed & Indexed', done: true, files: filenames, subject })
       response.end()
     } catch (error) {
@@ -620,7 +926,7 @@ app.post('/api/upload', upload.fields([{ name: 'file', maxCount: 20 }, { name: '
   try {
     if (mongoReady) {
       await Promise.all(files.map(file => Document.findOneAndUpdate(
-        { name: file.filename },
+        { name: file.filename, subject },
         { name: file.filename, size: file.size, subject, uploadedAt: new Date(), status: 'Uploaded' },
         { upsert: true, new: true },
       )))
@@ -633,7 +939,7 @@ app.post('/api/upload', upload.fields([{ name: 'file', maxCount: 20 }, { name: '
       body: JSON.stringify({ filenames, subject }),
       timeout: 300000, // 5 minute timeout for document indexing
     })
-    if (mongoReady) await Document.updateMany({ name: { $in: filenames } }, { status: 'Indexed' })
+    if (mongoReady) await Document.updateMany({ name: { $in: filenames }, subject }, { status: 'Indexed' })
     response.json({ message: `Successfully uploaded and indexed ${files.length} document(s) for ${subject}.`, files: filenames, subject })
   } catch (error) {
     response.status(error.status || 500).json({ error: error.message })
@@ -716,10 +1022,16 @@ app.get('/api/images/{*imagePath}', async (request, response) => {
     // 3. Document and Subject Authorization Check
     const segments = imagePath.split('/').filter(Boolean)
     if (segments.length >= 1) {
-      const folderStem = segments[0]
+      let folderStem = segments[0]
       let docSubject = null
 
-      if (mongoReady) {
+      // Check if imagePath is subject-scoped: e.g. DSA/doc_pdf/img.png
+      if (segments.length >= 2 && !segments[0].toLowerCase().endsWith('_pdf') && !segments[0].toLowerCase().endsWith('.pdf')) {
+        docSubject = segments[0].toUpperCase()
+        folderStem = segments[1]
+      }
+
+      if (mongoReady && !docSubject) {
         const docMatch = await Document.findOne({
           $or: [
             { name: { $regex: new RegExp(folderStem.replace(/_pdf$/i, ''), 'i') } },
@@ -748,8 +1060,8 @@ app.get('/api/images/{*imagePath}', async (request, response) => {
         } else if (user.role === 'student') {
           const enrolled = (user.enrolledSubjects && user.enrolledSubjects.length > 0)
             ? user.enrolledSubjects.map(s => s.toUpperCase())
-            : ['DSA', 'ML']
-          if (!enrolled.includes(docSubject.toUpperCase())) {
+            : []
+          if (enrolled.length > 0 && !enrolled.includes(docSubject.toUpperCase())) {
             return response.status(403).json({
               error: `Forbidden: Student is not enrolled in ${docSubject}.`,
             })
@@ -766,8 +1078,9 @@ app.get('/api/images/{*imagePath}', async (request, response) => {
           ],
         })
         if (!docExists) {
-          const localFolder = path.join(uploadDir, 'images', folderStem)
-          const folderExists = await fs.stat(localFolder).catch(() => null)
+          const localFolder = path.join(uploadDir, 'images', docSubject ? docSubject : '', folderStem)
+          const fallbackFolder = path.join(uploadDir, 'images', folderStem)
+          const folderExists = await fs.stat(localFolder).catch(() => fs.stat(fallbackFolder)).catch(() => null)
           if (!folderExists) {
             return response.status(404).json({ error: 'Course diagram not found or document was removed.' })
           }

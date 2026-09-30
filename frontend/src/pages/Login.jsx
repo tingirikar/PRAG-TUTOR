@@ -141,6 +141,9 @@ export default function Login() {
             <div>
               <p style={{ margin: '3px 0' }}>DSA Faculty: <strong>teacher_dsa</strong> / <strong>dsa123</strong></p>
               <p style={{ margin: '3px 0' }}>ML Faculty: <strong>teacher_ml</strong> / <strong>ml123</strong></p>
+              <p style={{ margin: '3px 0' }}>OS Faculty: <strong>teacher_os</strong> / <strong>os123</strong></p>
+              <p style={{ margin: '3px 0' }}>DBMS Faculty: <strong>teacher_dbms</strong> / <strong>dbms123</strong></p>
+              <p style={{ margin: '3px 0' }}>Networks Faculty: <strong>teacher_networks</strong> / <strong>networks123</strong></p>
             </div>
           )}
         </div>

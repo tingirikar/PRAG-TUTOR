@@ -22,11 +22,13 @@ class ImageHandler:
         self,
         matches: List[Any],
         top_k: int = 3,
+        subject: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Given RAG matches (which carry page_numbers in metadata),
         looks up image_index.json for each matched document/page and
         returns relevant extracted PDF image entries.
+        Supports both subject-scoped directories and legacy flat paths.
         """
         # Collect (document, page_number) pairs from matches
         doc_pages: Dict[str, set] = {}
@@ -62,9 +64,29 @@ class ImageHandler:
 
         for doc_name, pages in doc_pages.items():
             safe_name = doc_name.replace(" ", "_").replace(".", "_")
-            index_path = os.path.join(self.images_dir, safe_name, "image_index.json")
+            index_path = None
+            if subject:
+                subj_path = os.path.join(self.images_dir, subject.strip().upper(), safe_name, "image_index.json")
+                if os.path.exists(subj_path):
+                    index_path = subj_path
 
-            if not os.path.exists(index_path):
+            if not index_path or not os.path.exists(index_path):
+                flat_path = os.path.join(self.images_dir, safe_name, "image_index.json")
+                if os.path.exists(flat_path):
+                    index_path = flat_path
+
+            if not index_path or not os.path.exists(index_path):
+                # Search across subject subdirectories in self.images_dir
+                if os.path.isdir(self.images_dir):
+                    for sub in os.listdir(self.images_dir):
+                        sub_dir = os.path.join(self.images_dir, sub)
+                        if os.path.isdir(sub_dir):
+                            candidate = os.path.join(sub_dir, safe_name, "image_index.json")
+                            if os.path.exists(candidate):
+                                index_path = candidate
+                                break
+
+            if not index_path or not os.path.exists(index_path):
                 continue
 
             try:
@@ -75,12 +97,18 @@ class ImageHandler:
 
             for img_entry in index_data.get("images", []):
                 if img_entry.get("page_number") in pages:
-                    img_path = os.path.join(self.images_dir, img_entry["path"])
+                    stored_rel = img_entry.get("path", "")
+                    img_path = os.path.join(self.images_dir, stored_rel)
                     if not os.path.isfile(img_path):
-                        continue
+                        alt_path = os.path.join(os.path.dirname(index_path), img_entry.get("filename", ""))
+                        if os.path.isfile(alt_path):
+                            img_path = alt_path
+                            stored_rel = os.path.relpath(alt_path, self.images_dir).replace("\\", "/")
+                        else:
+                            continue
 
                     found_images.append({
-                        "url": f"/images/{img_entry['path']}",
+                        "url": f"/images/{stored_rel}",
                         "source": "document",
                         "document": doc_name,
                         "page": img_entry["page_number"],
@@ -103,6 +131,7 @@ class ImageHandler:
         user_question: Optional[str] = None,
         topic: Optional[str] = None,
         mode: str = "notes",
+        subject: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Returns diagrams strictly according to the selected mode:
@@ -110,5 +139,5 @@ class ImageHandler:
         - 'mermaid' / 'none': returns empty list (Mermaid is rendered interactively in chat).
         """
         if mode == "notes":
-            return self.find_document_images(matches, top_k=3)
+            return self.find_document_images(matches, top_k=3, subject=subject)
         return []

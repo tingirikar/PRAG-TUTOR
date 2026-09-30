@@ -92,11 +92,35 @@ class ResponseGenerator:
     def get_prerequisites_for_subject(self, subject: Optional[str] = None) -> Dict[str, List[str]]:
         """
         Returns syllabus prerequisites strictly isolated to the given subject.
-        If subject is None, returns all loaded prerequisites.
+        If subject is None or unknown, returns empty dict to prevent cross-subject leakage.
         """
         if subject:
-            return self.prerequisites_by_subject.get(subject.strip().upper(), {})
-        return self.prerequisites_data
+            return dict(self.prerequisites_by_subject.get(subject.strip().upper(), {}))
+        return {}
+
+    def set_prerequisites_for_subject(self, subject: str, prerequisites: Dict[str, List[str]]) -> int:
+        """
+        Dynamically sets in-memory prerequisites for a subject (synced from MongoDB).
+        Strictly isolated per subject.
+        """
+        subj_key = (subject or "").strip().upper()
+        if not subj_key:
+            return 0
+        cleaned: Dict[str, List[str]] = {}
+        for topic, prereqs in prerequisites.items():
+            t_str = str(topic).strip()
+            if not t_str:
+                continue
+            if isinstance(prereqs, list):
+                p_list = [str(p).strip() for p in prereqs if str(p).strip()]
+            elif prereqs is None:
+                p_list = []
+            else:
+                p_list = [str(prereqs).strip()]
+            cleaned[t_str] = list(dict.fromkeys(p_list))
+
+        self.prerequisites_by_subject[subj_key] = cleaned
+        return len(cleaned)
 
     def _load_prerequisites(self, prerequisites_file: Optional[str] = None) -> Dict[str, List[str]]:
         """
@@ -249,7 +273,7 @@ class ResponseGenerator:
         prerequisites JSON from the user question or retrieved context, strictly isolated to subject.
         Uses exact phrase matching, token-overlap with stemming, and semantic context matching.
         """
-        subj_prereqs = self.get_prerequisites_for_subject(subject) if subject else self.prerequisites_data
+        subj_prereqs = self.get_prerequisites_for_subject(subject)
         if not subj_prereqs:
             return None
 
@@ -354,7 +378,7 @@ class ResponseGenerator:
         """
         if not topic:
             return []
-        subj_prereqs = self.get_prerequisites_for_subject(subject) if subject else self.prerequisites_data
+        subj_prereqs = self.get_prerequisites_for_subject(subject)
         if not subj_prereqs:
             return []
 

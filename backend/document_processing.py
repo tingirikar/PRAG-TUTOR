@@ -217,9 +217,9 @@ class DocumentProcessor:
         except Exception as e:
             return {"status": "error", "message": f"Could not hash file: {e}"}
 
-        # Multi-modal image extraction
-        notify(15, f"Extracting diagrams & images from {pdf_file}...")
-        self.extract_images_from_pdf(filepath, pdf_file)
+        # Multi-modal image extraction (strictly isolated by subject)
+        notify(15, f"Extracting diagrams & images from {pdf_file} ({subject})...")
+        self.extract_images_from_pdf(filepath, pdf_file, subject=subject)
 
         # Upsert vectors to Pinecone isolated strictly to the subject namespace (DSA vs ML)
         if self.index is not None and processed_hashes.get(pdf_file) != file_hash:
@@ -364,19 +364,20 @@ class DocumentProcessor:
             # If analysis fails, keep the image (don't reject on error)
             return True, 0.5, f"analysis error: {e}"
 
-    def extract_images_from_pdf(self, pdf_file, pdf_name):
+    def extract_images_from_pdf(self, pdf_file, pdf_name, subject="DSA"):
         """
         Extracts embedded images from a PDF using PyMuPDF.
-        Saves images to uploads/images/{pdf_name}/ and creates an image_index.json.
+        Saves images to uploads/images/{subject}/{pdf_name}/ and creates an image_index.json.
         Returns the image index data.
         """
         if fitz is None or Image is None:
             print(f"[Notice] Skipping image extraction for '{pdf_name}' (PyMuPDF or Pillow not available).")
             return []
 
-        # Create directory for this document's images
+        # Create directory for this document's images scoped by subject
         safe_name = pdf_name.replace(" ", "_").replace(".", "_")
-        doc_images_dir = os.path.join(self.images_dir, safe_name)
+        safe_subject = (subject or "DSA").strip().upper()
+        doc_images_dir = os.path.join(self.images_dir, safe_subject, safe_name)
         # Clean previous extraction
         if os.path.exists(doc_images_dir):
             shutil.rmtree(doc_images_dir)
@@ -437,7 +438,7 @@ class DocumentProcessor:
                             "height": height,
                             "size_bytes": len(image_bytes),
                             "quality_score": quality_score,
-                            "path": f"{safe_name}/{img_filename}"
+                            "path": f"{safe_subject}/{safe_name}/{img_filename}"
                         })
                         image_count += 1
 
@@ -452,11 +453,12 @@ class DocumentProcessor:
             with open(index_path, "w", encoding="utf-8") as f:
                 json.dump({
                     "document": pdf_name,
+                    "subject": safe_subject,
                     "total_images": image_count,
                     "images": image_index
                 }, f, indent=2)
 
-            print(f"  Extracted {image_count} image(s) from '{pdf_name}'.")
+            print(f"  Extracted {image_count} image(s) from '{pdf_name}' for subject '{safe_subject}'.")
             return image_index
 
         except Exception as e:
@@ -484,6 +486,16 @@ class DocumentProcessor:
             except Exception:
                 pass
 
+        # Load subject documents map
+        subj_map = {}
+        subject_doc_file = os.path.join(self.pdf_dir, "subject_documents.json")
+        if os.path.exists(subject_doc_file):
+            try:
+                with open(subject_doc_file, "r", encoding="utf-8") as smf:
+                    subj_map = json.load(smf)
+            except Exception:
+                subj_map = {}
+
         import hashlib
         updated = False
         print(f"Checking {len(pdf_files)} PDF file(s) for vector database updates...")
@@ -503,6 +515,11 @@ class DocumentProcessor:
 
             file_is_new_or_modified = (processed_hashes.get(pdf_file) != file_hash)
 
+            file_subject = subj_map.get(pdf_file)
+            if not file_subject:
+                nl = pdf_file.lower()
+                file_subject = "ML" if ("ml" in nl or "machine" in nl or "cse-3-1" in nl) else "DSA"
+
             # Check if prerequisite JSON exists for this document
             safe_stem = get_safe_filename(pdf_file).lower()
             existing_jsons = [f.lower() for f in os.listdir(self.prereq_generator.jsons_dir) if f.endswith(".json")]
@@ -516,16 +533,16 @@ class DocumentProcessor:
 
             # 1. Process and upload to vector DB if new/modified
             if file_is_new_or_modified:
-                print(f"Reading and processing updated/new file '{pdf_file}'...")
+                print(f"Reading and processing updated/new file '{pdf_file}' ({file_subject})...")
 
-                # Extract images from PDF (multi-modal feature)
-                self.extract_images_from_pdf(filepath, pdf_file)
+                # Extract images from PDF (multi-modal feature, subject-scoped)
+                self.extract_images_from_pdf(filepath, pdf_file, subject=file_subject)
 
                 # Read PDF with page tracking for better metadata
                 pages = self.read_pdf_by_page(filepath)
                 print(f"Generating embeddings for '{pdf_file}'...")
                 chunk_data, embeddings = self.generate_embeddings_with_pages(pages)
-                print(f"Uploading {len(chunk_data)} vectors to Pinecone...")
+                print(f"Uploading {len(chunk_data)} vectors to Pinecone namespace '{file_subject}'...")
                 vectors_to_upsert = []
                 for i, embedding in enumerate(embeddings):
                     vector = embedding.tolist()
@@ -533,21 +550,22 @@ class DocumentProcessor:
                     # Include page_numbers in metadata for image association
                     page_nums = chunk["page_numbers"]
                     vectors_to_upsert.append((
-                        f"{pdf_file}_{i}",
+                        f"{file_subject}_{pdf_file}_{i}",
                         vector,
                         {
                             "sentence": chunk["text"],
                             "document": pdf_file,
+                            "subject": file_subject,
                             "chunk_index": i,
                             "page_numbers": json.dumps(page_nums)
                         }
                     ))
                     
                     if len(vectors_to_upsert) >= 100:
-                        self.index.upsert(vectors=vectors_to_upsert)
+                        self.index.upsert(vectors=vectors_to_upsert, namespace=file_subject)
                         vectors_to_upsert = []
                 if vectors_to_upsert:
-                    self.index.upsert(vectors=vectors_to_upsert)
+                    self.index.upsert(vectors=vectors_to_upsert, namespace=file_subject)
                 
                 # Update hash cache
                 processed_hashes[pdf_file] = file_hash
@@ -559,8 +577,8 @@ class DocumentProcessor:
             # 2. Automatically generate prerequisite JSON if new/modified or if JSON is missing
             if file_is_new_or_modified or json_is_missing:
                 try:
-                    print(f"Generating automatic prerequisites for '{pdf_file}'...")
-                    self.prereq_generator.generate_for_document(filepath)
+                    print(f"Generating automatic prerequisites for '{pdf_file}' ({file_subject})...")
+                    self.prereq_generator.generate_for_document(filepath, subject=file_subject)
                 except Exception as e:
                     print(f"Warning: Could not generate prerequisites for {pdf_file}: {e}")
 
@@ -612,12 +630,17 @@ class DocumentProcessor:
             except Exception as e:
                 print(f"Warning: could not update subject_documents.json on delete: {e}")
 
-        # 3. Delete extracted images for this document
+        # 3. Delete extracted images for this document (subject-scoped and legacy flat paths)
         safe_name = filename.replace(" ", "_").replace(".", "_")
-        doc_images_dir = os.path.join(self.images_dir, safe_name)
-        if os.path.exists(doc_images_dir):
-            shutil.rmtree(doc_images_dir)
-            print(f"Removed extracted images for {filename}.")
+        if subject:
+            subj_images_dir = os.path.join(self.images_dir, subject.strip().upper(), safe_name)
+            if os.path.exists(subj_images_dir):
+                shutil.rmtree(subj_images_dir)
+                print(f"Removed subject-scoped extracted images for {filename} ({subject}).")
+        legacy_doc_images_dir = os.path.join(self.images_dir, safe_name)
+        if os.path.exists(legacy_doc_images_dir):
+            shutil.rmtree(legacy_doc_images_dir)
+            print(f"Removed legacy extracted images for {filename}.")
 
         # 3.1. Delete generated prerequisite JSON if exists
         safe_stem = get_safe_filename(filename)
