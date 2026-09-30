@@ -11,6 +11,7 @@ import {
   Cpu, Globe, SquarePen, Check, X, MessageSquare, Trash2, BookOpen, RefreshCw,
   FolderOpen, Link2, Target, FileText, Files, Network, Brain, Binary,
   ChevronUp, ChevronDown, CircleDot, Circle, Images,
+  ArrowUp,
 } from 'lucide-react'
 import './StudentDashboard.css'
 
@@ -1176,8 +1177,10 @@ export default function StudentDashboard() {
                   type="submit"
                   className="chat-send"
                   disabled={loading || !input.trim()}
+                  aria-label="Send"
+                  title="Send"
                 >
-                  Send
+                  <ArrowUp size={18} strokeWidth={2.4} />
                 </button>
               </div>
             </form>
