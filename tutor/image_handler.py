@@ -66,25 +66,22 @@ class ImageHandler:
             safe_name = doc_name.replace(" ", "_").replace(".", "_")
             index_path = None
             if subject:
-                subj_path = os.path.join(self.images_dir, subject.strip().upper(), safe_name, "image_index.json")
+                # 1. Isolated per-subject images: uploads/<subject>/images/<safe_name>/image_index.json
+                subj_path = os.path.join(self.images_dir, subject.strip().lower(), "images", safe_name, "image_index.json")
                 if os.path.exists(subj_path):
                     index_path = subj_path
+                else:
+                    subj_path_upper = os.path.join(self.images_dir, subject.strip().upper(), "images", safe_name, "image_index.json")
+                    if os.path.exists(subj_path_upper):
+                        index_path = subj_path_upper
 
             if not index_path or not os.path.exists(index_path):
-                flat_path = os.path.join(self.images_dir, safe_name, "image_index.json")
-                if os.path.exists(flat_path):
-                    index_path = flat_path
-
-            if not index_path or not os.path.exists(index_path):
-                # Search across subject subdirectories in self.images_dir
-                if os.path.isdir(self.images_dir):
-                    for sub in os.listdir(self.images_dir):
-                        sub_dir = os.path.join(self.images_dir, sub)
-                        if os.path.isdir(sub_dir):
-                            candidate = os.path.join(sub_dir, safe_name, "image_index.json")
-                            if os.path.exists(candidate):
-                                index_path = candidate
-                                break
+                # 2. Legacy fallback: uploads/images/<subject>/<safe_name>/image_index.json
+                candidate = os.path.join(self.images_dir, "images", (subject or "").upper(), safe_name, "image_index.json")
+                if os.path.exists(candidate):
+                    index_path = candidate
+                elif os.path.exists(os.path.join(self.images_dir, "images", safe_name, "image_index.json")):
+                    index_path = os.path.join(self.images_dir, "images", safe_name, "image_index.json")
 
             if not index_path or not os.path.exists(index_path):
                 continue

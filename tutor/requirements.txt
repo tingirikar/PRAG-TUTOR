@@ -8,3 +8,4 @@ uvicorn[standard]
 PyMuPDF
 Pillow
 requests
+pymongo

@@ -34,13 +34,9 @@ class DocumentProcessor:
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     ):
         self.pdf_dir = pdf_dir
-        self.images_dir = os.path.join(pdf_dir, "images")
-        os.makedirs(self.images_dir, exist_ok=True)
         self.model = SentenceTransformer(model_name)
-        base_dir = os.path.dirname(os.path.abspath(__file__))
         self.prereq_generator = PrerequisiteGenerator(
-            llm_api_key=groq_api_key,
-            jsons_dir=os.path.join(base_dir, "prerequisites")
+            llm_api_key=groq_api_key
         )
         try:
             pc = pinecone.Pinecone(api_key=vector_db_api_key)
@@ -267,7 +263,7 @@ class DocumentProcessor:
             except Exception:
                 pass
 
-        # Automatically generate prerequisite JSON
+        # Automatically generate prerequisites directly to MongoDB Atlas
         prereq_res = {}
         try:
             def prereq_progress(pct, stage):
@@ -277,29 +273,13 @@ class DocumentProcessor:
         except Exception as e:
             print(f"Warning: Could not generate prerequisites for {pdf_file}: {e}")
 
-        # 3. Update subject to document mapping file
-        subject_doc_file = os.path.join(self.pdf_dir, "subject_documents.json")
-        subj_map = {}
-        if os.path.exists(subject_doc_file):
-            try:
-                with open(subject_doc_file, "r", encoding="utf-8") as smf:
-                    subj_map = json.load(smf)
-            except Exception:
-                subj_map = {}
-        subj_map[pdf_file] = (subject or "DSA").strip().upper()
-        try:
-            with open(subject_doc_file, "w", encoding="utf-8") as smf:
-                json.dump(subj_map, smf, indent=2)
-        except Exception as e:
-            print(f"Warning: could not save subject_documents.json: {e}")
-
         notify(100, f"Successfully processed and indexed {pdf_file}")
         return {
             "status": "success",
             "file": pdf_file,
             "hash": file_hash,
             "topics_count": prereq_res.get("topics_count", 0),
-            "json_path": prereq_res.get("json_path"),
+            "subject": subject,
             "prerequisites": prereq_res.get("prerequisites", {})
         }
 
@@ -374,10 +354,10 @@ class DocumentProcessor:
             print(f"[Notice] Skipping image extraction for '{pdf_name}' (PyMuPDF or Pillow not available).")
             return []
 
-        # Create directory for this document's images scoped by subject
+        # Create directory for this document's images scoped by subject: uploads/{subject}/images/{safe_name}/
         safe_name = pdf_name.replace(" ", "_").replace(".", "_")
-        safe_subject = (subject or "DSA").strip().upper()
-        doc_images_dir = os.path.join(self.images_dir, safe_subject, safe_name)
+        safe_subject = (subject or "DSA").strip().lower()
+        doc_images_dir = os.path.join(self.pdf_dir, safe_subject, "images", safe_name)
         # Clean previous extraction
         if os.path.exists(doc_images_dir):
             shutil.rmtree(doc_images_dir)
@@ -438,7 +418,7 @@ class DocumentProcessor:
                             "height": height,
                             "size_bytes": len(image_bytes),
                             "quality_score": quality_score,
-                            "path": f"{safe_subject}/{safe_name}/{img_filename}"
+                            "path": f"{safe_subject}/images/{safe_name}/{img_filename}"
                         })
                         image_count += 1
 
@@ -471,8 +451,26 @@ class DocumentProcessor:
             return
         if not os.path.exists(self.pdf_dir):
             os.makedirs(self.pdf_dir)
-        pdf_files = [f for f in os.listdir(self.pdf_dir) if f.endswith(".pdf")]
-        if not pdf_files:
+        pdf_entries = []
+        if os.path.exists(self.pdf_dir):
+            for item in os.listdir(self.pdf_dir):
+                item_path = os.path.join(self.pdf_dir, item)
+                if os.path.isfile(item_path) and item.lower().endswith(".pdf"):
+                    nl = item.lower()
+                    if "ml" in nl or "machine" in nl or "cse-3-1" in nl:
+                        subj = "ML"
+                    elif "cn" in nl or "network" in nl:
+                        subj = "CN"
+                    else:
+                        subj = "DSA"
+                    pdf_entries.append((item_path, item, subj))
+                elif os.path.isdir(item_path) and item.lower() not in ["images", "node_modules", ".git"]:
+                    folder_subj = item.upper()
+                    for subfile in os.listdir(item_path):
+                        if subfile.lower().endswith(".pdf"):
+                            pdf_entries.append((os.path.join(item_path, subfile), subfile, folder_subj))
+
+        if not pdf_entries:
             print("No PDF files found to process.")
             return
 
@@ -486,23 +484,11 @@ class DocumentProcessor:
             except Exception:
                 pass
 
-        # Load subject documents map
-        subj_map = {}
-        subject_doc_file = os.path.join(self.pdf_dir, "subject_documents.json")
-        if os.path.exists(subject_doc_file):
-            try:
-                with open(subject_doc_file, "r", encoding="utf-8") as smf:
-                    subj_map = json.load(smf)
-            except Exception:
-                subj_map = {}
-
         import hashlib
         updated = False
-        print(f"Checking {len(pdf_files)} PDF file(s) for vector database updates...")
+        print(f"Checking {len(pdf_entries)} PDF file(s) for vector database updates...")
         
-        for pdf_file in pdf_files:
-            filepath = os.path.join(self.pdf_dir, pdf_file)
-            
+        for filepath, pdf_file, file_subject in pdf_entries:
             # Compute MD5 hash of the PDF file
             hasher = hashlib.md5()
             try:
@@ -515,21 +501,13 @@ class DocumentProcessor:
 
             file_is_new_or_modified = (processed_hashes.get(pdf_file) != file_hash)
 
-            file_subject = subj_map.get(pdf_file)
-            if not file_subject:
-                nl = pdf_file.lower()
-                file_subject = "ML" if ("ml" in nl or "machine" in nl or "cse-3-1" in nl) else "DSA"
-
-            # Check if prerequisite JSON exists for this document
-            safe_stem = get_safe_filename(pdf_file).lower()
-            existing_jsons = [f.lower() for f in os.listdir(self.prereq_generator.jsons_dir) if f.endswith(".json")]
-            stem_core = safe_stem.replace("_full_notes", "").replace("_notes", "").strip("_")
-            json_exists = any(
-                f == f"{safe_stem}_prerequisites.json" or
-                (stem_core and stem_core in f)
-                for f in existing_jsons
-            )
-            json_is_missing = not json_exists
+            # Check if prerequisites exist in MongoDB Atlas for this document
+            from db import get_db
+            db = get_db()
+            prereqs_exist = False
+            if db is not None:
+                prereqs_exist = db.prerequisites.count_documents({"document": pdf_file, "subject": file_subject}) > 0
+            prereqs_missing = not prereqs_exist
 
             # 1. Process and upload to vector DB if new/modified
             if file_is_new_or_modified:
@@ -574,8 +552,8 @@ class DocumentProcessor:
             else:
                 print(f"Skipping vector upload for '{pdf_file}' (already up-to-date).")
 
-            # 2. Automatically generate prerequisite JSON if new/modified or if JSON is missing
-            if file_is_new_or_modified or json_is_missing:
+            # 2. Automatically generate prerequisite in MongoDB Atlas if missing
+            if prereqs_missing:
                 try:
                     print(f"Generating automatic prerequisites for '{pdf_file}' ({file_subject})...")
                     self.prereq_generator.generate_for_document(filepath, subject=file_subject)
@@ -592,8 +570,10 @@ class DocumentProcessor:
 
     def delete_document(self, filename, subject=None):
         """Deletes a document from disk, tracking file, vector index, and extracted images."""
-        # 1. Remove file from uploads directory
-        filepath = os.path.join(self.pdf_dir, filename)
+        # 1. Remove file from uploads directory (checks uploads/{subject}/{filename} and uploads/{filename})
+        filepath = os.path.join(self.pdf_dir, subject.strip().lower(), filename) if subject else os.path.join(self.pdf_dir, filename)
+        if not os.path.exists(filepath):
+            filepath = os.path.join(self.pdf_dir, filename)
         file_exists = os.path.isfile(filepath)
         tracking_file = os.path.join(self.pdf_dir, "processed_files.json")
         tracking_exists = False
@@ -617,40 +597,33 @@ class DocumentProcessor:
                 json.dump(hashes, f, indent=4)
             print(f"Removed {filename} from tracking file.")
 
-        # 2.1. Update subject mapping file
-        subject_doc_file = os.path.join(self.pdf_dir, "subject_documents.json")
-        if os.path.exists(subject_doc_file):
+        # 2.1. Clean up prerequisites in MongoDB Atlas for this document
+        clean_subj = (subject or "DSA").strip().upper()
+        from db import get_db
+        db = get_db()
+        if db is not None:
             try:
-                with open(subject_doc_file, "r", encoding="utf-8") as smf:
-                    subj_map = json.load(smf)
-                if filename in subj_map:
-                    del subj_map[filename]
-                    with open(subject_doc_file, "w", encoding="utf-8") as smf:
-                        json.dump(subj_map, smf, indent=2)
+                db.prerequisites.delete_many({"document": filename, "subject": clean_subj, "isCustom": False})
+                print(f"Removed auto-generated prerequisites for {filename} from MongoDB Atlas ({clean_subj}).")
             except Exception as e:
-                print(f"Warning: could not update subject_documents.json on delete: {e}")
+                print(f"Notice: could not delete MongoDB prerequisites for {filename}: {e}")
 
-        # 3. Delete extracted images for this document (subject-scoped and legacy flat paths)
+        # 3. Delete extracted images for this document: uploads/{subject}/images/{safe_name}/
         safe_name = filename.replace(" ", "_").replace(".", "_")
         if subject:
-            subj_images_dir = os.path.join(self.images_dir, subject.strip().upper(), safe_name)
+            subj_images_dir = os.path.join(self.pdf_dir, subject.strip().lower(), "images", safe_name)
             if os.path.exists(subj_images_dir):
                 shutil.rmtree(subj_images_dir)
-                print(f"Removed subject-scoped extracted images for {filename} ({subject}).")
-        legacy_doc_images_dir = os.path.join(self.images_dir, safe_name)
+                print(f"Removed subject-isolated extracted images for {filename} ({subject}).")
+            # Also clean legacy uploads/images/{SUBJECT}/{safe_name} if exists
+            legacy_subj_dir = os.path.join(self.pdf_dir, "images", subject.strip().upper(), safe_name)
+            if os.path.exists(legacy_subj_dir):
+                shutil.rmtree(legacy_subj_dir)
+        legacy_doc_images_dir = os.path.join(self.pdf_dir, "images", safe_name)
         if os.path.exists(legacy_doc_images_dir):
             shutil.rmtree(legacy_doc_images_dir)
             print(f"Removed legacy extracted images for {filename}.")
 
-        # 3.1. Delete generated prerequisite JSON if exists
-        safe_stem = get_safe_filename(filename)
-        prereq_json_path = os.path.join(self.prereq_generator.jsons_dir, f"{safe_stem}_prerequisites.json")
-        if os.path.exists(prereq_json_path):
-            try:
-                os.remove(prereq_json_path)
-                print(f"Removed prerequisite file: {prereq_json_path}")
-            except Exception as e:
-                print(f"Warning: Could not remove prerequisite file {prereq_json_path}: {e}")
 
         # 4. Delete vectors from Pinecone scoped by subject namespace
         vectors_pruned = False

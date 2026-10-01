@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 # pyrefly: ignore [missing-import]
@@ -15,19 +15,50 @@ from response_generation import ResponseGenerator
 from user_view import QueryProcessor
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+
+# Project-wide shared uploads directory: prag_tutor/uploads
+UPLOAD_DIR = os.path.join(PROJECT_ROOT, "uploads")
+if not os.path.exists(UPLOAD_DIR) and os.path.exists(os.path.join(BASE_DIR, "uploads")):
+    UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Load root .env first, then local .env
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY", "").strip()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
 HF_API_KEY = os.environ.get("HF_API_KEY", "").strip()
-IMAGES_DIR = os.path.join(UPLOAD_DIR, "images")
-os.makedirs(IMAGES_DIR, exist_ok=True)
-
 app = FastAPI(title="LPITutor Python RAG Service")
 
-# Serve extracted and generated images as static files
-app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
+
+@app.get("/images/{image_path:path}")
+def serve_image(image_path: str):
+    """Serves isolated subject images (uploads/{subject}/images/...) as well as legacy image paths."""
+    if ".." in image_path:
+        raise HTTPException(status_code=400, detail="Invalid image path")
+
+    # 1. Exact relative path inside UPLOAD_DIR (e.g. dsa/images/safe_name/img.png)
+    candidate = os.path.join(UPLOAD_DIR, image_path)
+    if os.path.isfile(candidate):
+        return FileResponse(candidate)
+
+    # 2. Check if path was formatted without 'images/' (e.g. dsa/safe_name/img.png -> dsa/images/safe_name/img.png)
+    parts = image_path.strip("/").split("/")
+    if len(parts) >= 2 and parts[1].lower() != "images":
+        subj = parts[0]
+        rest = parts[1:]
+        candidate_with_images = os.path.join(UPLOAD_DIR, subj, "images", *rest)
+        if os.path.isfile(candidate_with_images):
+            return FileResponse(candidate_with_images)
+
+    # 3. Legacy flat uploads/images/ candidate
+    legacy_candidate = os.path.join(UPLOAD_DIR, "images", image_path)
+    if os.path.isfile(legacy_candidate):
+        return FileResponse(legacy_candidate)
+
+    raise HTTPException(status_code=404, detail="Image not found")
 
 
 class QueryRequest(BaseModel):
@@ -57,11 +88,6 @@ class DocumentRequest(BaseModel):
 class IndexRequest(BaseModel):
     filenames: List[str] = Field(default_factory=list)
     subject: Optional[str] = "DSA"
-
-
-class PrerequisiteSyncRequest(BaseModel):
-    subject: str = Field(min_length=1)
-    prerequisites: Dict[str, List[str]] = Field(default_factory=dict)
 
 
 print("Initializing Python RAG service...")
@@ -109,7 +135,7 @@ except Exception as error:
 
 try:
     image_handler = ImageHandler(
-        images_dir=IMAGES_DIR,
+        images_dir=UPLOAD_DIR,
         hf_api_key=HF_API_KEY,
     )
 except Exception as error:
@@ -288,13 +314,15 @@ def index_documents(request: IndexRequest = IndexRequest()) -> Dict[str, Any]:
         if request.filenames:
             for filename in request.filenames:
                 filepath = os.path.join(UPLOAD_DIR, filename)
+                if not os.path.exists(filepath) and request.subject:
+                    subj_filepath = os.path.join(UPLOAD_DIR, request.subject.lower(), filename)
+                    if os.path.exists(subj_filepath):
+                        filepath = subj_filepath
                 if os.path.exists(filepath):
                     document_processor.process_single_pdf(filepath, subject=request.subject)
         else:
             document_processor.upload_to_vector_db()
         
-        if response_generator:
-            response_generator.reload_prerequisites()
         return {
             "message": "Documents indexed successfully.",
             "subject": request.subject,
@@ -325,6 +353,10 @@ def index_documents_stream(request: IndexRequest = IndexRequest()):
                     total_files = len(request.filenames)
                     for f_idx, filename in enumerate(request.filenames):
                         filepath = os.path.join(UPLOAD_DIR, filename)
+                        if not os.path.exists(filepath) and request.subject:
+                            subj_filepath = os.path.join(UPLOAD_DIR, request.subject.lower(), filename)
+                            if os.path.exists(subj_filepath):
+                                filepath = subj_filepath
                         if os.path.exists(filepath):
                             file_base_pct = int((f_idx / total_files) * 100)
                             file_weight = 1.0 / total_files
@@ -342,10 +374,6 @@ def index_documents_stream(request: IndexRequest = IndexRequest()):
                 else:
                     notify(50, "Indexing all documents in vector database...")
                     document_processor.upload_to_vector_db()
-
-                if response_generator:
-                    notify(95, "Reloading prerequisite syllabus graph...")
-                    response_generator.reload_prerequisites()
 
                 notify(100, "Documents indexed successfully.")
                 q.put(None)
@@ -371,8 +399,6 @@ def delete_document(request: DocumentRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Document processor is unavailable.")
     try:
         result = document_processor.delete_document(request.filename, subject=request.subject)
-        if response_generator:
-            response_generator.reload_prerequisites()
         return {
             "message": f"Document '{request.filename}' deleted successfully.",
             **result,
@@ -383,27 +409,3 @@ def delete_document(request: DocumentRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Failed to delete document: {error}") from error
-
-
-@app.post("/rag/prerequisites/reload")
-def reload_prerequisites() -> Dict[str, Any]:
-    if not response_generator:
-        raise HTTPException(status_code=503, detail="Response generator is unavailable.")
-    prereqs = response_generator.reload_prerequisites()
-    return {
-        "status": "ok",
-        "count": len(prereqs),
-        "prerequisites": prereqs,
-    }
-
-
-@app.post("/rag/prerequisites/sync")
-def sync_prerequisites(request: PrerequisiteSyncRequest) -> Dict[str, Any]:
-    if not response_generator:
-        raise HTTPException(status_code=503, detail="Response generator is unavailable.")
-    count = response_generator.set_prerequisites_for_subject(request.subject, request.prerequisites)
-    return {
-        "status": "ok",
-        "subject": request.subject,
-        "count": count,
-    }

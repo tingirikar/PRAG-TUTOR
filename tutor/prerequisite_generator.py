@@ -98,11 +98,7 @@ class PrerequisiteGenerator:
         llm_api_key: Optional[str] = None,
         model_name: str = "qwen/qwen3.8-27b",
         fallback_models: Optional[List[str]] = None,
-        jsons_dir: Optional[str] = None,
     ):
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Resolve LLM API Key
         if not llm_api_key:
             llm_api_key = os.environ.get("GROQ_API_KEY", "").strip()
 
@@ -110,8 +106,6 @@ class PrerequisiteGenerator:
         self.groq_client = Groq(api_key=llm_api_key) if llm_api_key else None
         self.model_name = model_name
         self.fallback_models = fallback_models or ["openai/gpt-oss-20b", "llama-3.3-70b-versatile", "groq/compound-mini"]
-        self.jsons_dir = jsons_dir or os.path.join(base_dir, "prerequisites")
-        os.makedirs(self.jsons_dir, exist_ok=True)
 
     def extract_text_from_pdf(self, pdf_path: str) -> List[Dict[str, Any]]:
         """
@@ -563,42 +557,47 @@ CRITICAL RULES:
         return reduced
 
     # ---------------------------------------------------------------------------
-    # Step 4: JSON Persistence
+    # Step 4: MongoDB Atlas Persistence
     # ---------------------------------------------------------------------------
 
-    def save_prerequisite_json(
+    def save_prerequisites_to_mongodb(
         self,
         document_name: str,
         prerequisite_graph: Dict[str, List[str]],
         subject: Optional[str] = None
-    ) -> str:
+    ) -> int:
         """
-        Saves the prerequisite graph to prerequisites/<safe_name>_prerequisites.json.
-        Preserves compatibility with the existing application schema (dict under 'prerequisites')
-        while also providing 'document', 'subject', and structured 'topics' array.
+        Saves the generated topics and prerequisites directly into MongoDB Atlas.
+        Strictly isolated per subject. No disk JSON files created.
         """
-        safe_stem = get_safe_filename(document_name)
-        filename = f"{safe_stem}_prerequisites.json"
-        filepath = os.path.join(self.jsons_dir, filename)
+        from db import get_db
+        db = get_db()
+        if db is None:
+            logger.warning("MongoDB Atlas is not accessible; cannot persist prerequisites.")
+            return 0
 
-        # Build topics list for conceptual clarity
-        topics_list = [
-            {"topic": topic, "prerequisites": prereqs}
-            for topic, prereqs in prerequisite_graph.items()
-        ]
-
-        payload = {
-            "document": document_name,
-            "subject": (subject or "DSA").strip().upper(),
-            "topics_count": len(prerequisite_graph),
-            "prerequisites": prerequisite_graph,
-            "topics": topics_list
-        }
-
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2, ensure_ascii=False)
-
-        return filepath
+        clean_subject = (subject or "DSA").strip().upper()
+        inserted_count = 0
+        for topic, prereqs in prerequisite_graph.items():
+            t_str = str(topic).strip()
+            if not t_str:
+                continue
+            p_list = [str(p).strip() for p in prereqs if str(p).strip()]
+            db.prerequisites.update_one(
+                {"subject": clean_subject, "topic": t_str},
+                {
+                    "$set": {
+                        "subject": clean_subject,
+                        "topic": t_str,
+                        "prerequisites": p_list,
+                        "document": document_name,
+                        "isCustom": False,
+                    }
+                },
+                upsert=True
+            )
+            inserted_count += 1
+        return inserted_count
 
     # ---------------------------------------------------------------------------
     # End-to-End Pipeline
@@ -608,7 +607,7 @@ CRITICAL RULES:
         """
         Executes the entire automated prerequisite generation pipeline:
         PDF -> Extraction -> Chunking -> Topic Identification -> Normalization ->
-        Prerequisite Generation -> Cycle Detection & Validation -> JSON Output.
+        Prerequisite Generation -> Cycle Detection & Validation -> MongoDB Atlas Persistence.
         """
         def notify(pct, msg):
             if progress_callback:
@@ -630,7 +629,6 @@ CRITICAL RULES:
                 "status": "error",
                 "message": f"No extractable text found in '{doc_basename}'.",
                 "topics_count": 0,
-                "json_path": None
             }
 
         # 2. Chunk text
@@ -653,7 +651,6 @@ CRITICAL RULES:
                 "status": "error",
                 "message": f"No valid learning topics could be extracted from '{doc_basename}'.",
                 "topics_count": 0,
-                "json_path": None
             }
 
         # 5. Generate prerequisite relationships
@@ -665,15 +662,15 @@ CRITICAL RULES:
         notify(88, "Validating graph & resolving cyclic dependencies...")
         sanitized_graph = self.validate_and_sanitize_graph(raw_graph, normalized_topics)
 
-        # 7. Save JSON
-        notify(96, "Saving prerequisite curriculum structure...")
-        json_path = self.save_prerequisite_json(doc_basename, sanitized_graph, subject=subject)
+        # 7. Save directly to MongoDB Atlas
+        notify(96, "Persisting syllabus prerequisites directly into MongoDB Atlas...")
+        saved_count = self.save_prerequisites_to_mongodb(doc_basename, sanitized_graph, subject=subject)
 
-        notify(100, "Prerequisites ready.")
+        notify(100, f"Saved {saved_count} prerequisite topics into MongoDB Atlas.")
         return {
             "status": "success",
             "document": doc_basename,
             "topics_count": len(sanitized_graph),
-            "json_path": json_path,
+            "subject": (subject or "DSA").strip().upper(),
             "prerequisites": sanitized_graph
         }

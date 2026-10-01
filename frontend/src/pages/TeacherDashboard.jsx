@@ -277,8 +277,8 @@ export default function TeacherDashboard() {
     return new Promise((resolve) => {
       const xhr = new XMLHttpRequest()
       const formData = new FormData()
-      formData.append('file', fileObj.file)
       formData.append('subject', teacherSubject)
+      formData.append('file', fileObj.file)
 
       setFiles(prev => prev.map(x => x.id === fileObj.id ? {
         ...x,

@@ -1,11 +1,12 @@
 import os
 import json
 import re
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 
 from groq import Groq
 import pinecone
 import requests
+from db import get_db
 
 class ResponseResult(str):
     """
@@ -76,190 +77,67 @@ class ResponseGenerator:
         self.ollama_url = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
         self.ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
 
-        # Load prerequisites mapping from JSON file (source of truth)
-        self.prerequisites_by_subject: Dict[str, Dict[str, List[str]]] = {}
+        # Prerequisites are loaded directly from MongoDB Atlas (Single Source of Truth)
         self.documents_by_subject: Dict[str, Set[str]] = {}
-        self.prerequisites_data = self._load_prerequisites(prerequisites_file)
 
-    def reload_prerequisites(self, prerequisites_file: Optional[str] = None):
-        """
-        Reloads topic prerequisites from the JSON files on disk
-        so newly generated prerequisites are immediately available.
-        """
-        self.prerequisites_data = self._load_prerequisites(prerequisites_file)
-        return self.prerequisites_data
+    @property
+    def prerequisites_data(self) -> Dict[str, List[str]]:
+        """Returns all topics across subjects directly from MongoDB Atlas."""
+        db = get_db()
+        if db is None:
+            return {}
+        try:
+            return {
+                doc["topic"]: doc.get("prerequisites", [])
+                for doc in db.prerequisites.find({}, {"topic": 1, "prerequisites": 1})
+                if doc.get("topic")
+            }
+        except Exception as e:
+            print(f"[Warning] Failed to fetch prerequisites from MongoDB: {e}")
+            return {}
 
     def get_prerequisites_for_subject(self, subject: Optional[str] = None) -> Dict[str, List[str]]:
         """
-        Returns syllabus prerequisites strictly isolated to the given subject.
+        Returns syllabus prerequisites strictly isolated to the given subject directly from MongoDB Atlas.
         If subject is None or unknown, returns empty dict to prevent cross-subject leakage.
         """
-        if subject:
-            return dict(self.prerequisites_by_subject.get(subject.strip().upper(), {}))
-        return {}
+        if not subject:
+            return {}
+        subj_key = str(subject).strip().upper()
+        db = get_db()
+        if db is None:
+            return {}
+        try:
+            cursor = db.prerequisites.find({"subject": subj_key}, {"topic": 1, "prerequisites": 1})
+            return {
+                doc["topic"]: doc.get("prerequisites", [])
+                for doc in cursor
+                if doc.get("topic")
+            }
+        except Exception as e:
+            print(f"[Warning] Failed to fetch {subj_key} prerequisites from MongoDB: {e}")
+            return {}
 
-    def set_prerequisites_for_subject(self, subject: str, prerequisites: Dict[str, List[str]]) -> int:
-        """
-        Dynamically sets in-memory prerequisites for a subject (synced from MongoDB).
-        Strictly isolated per subject.
-        """
-        subj_key = (subject or "").strip().upper()
-        if not subj_key:
-            return 0
-        cleaned: Dict[str, List[str]] = {}
-        for topic, prereqs in prerequisites.items():
-            t_str = str(topic).strip()
-            if not t_str:
-                continue
-            if isinstance(prereqs, list):
-                p_list = [str(p).strip() for p in prereqs if str(p).strip()]
-            elif prereqs is None:
-                p_list = []
-            else:
-                p_list = [str(prereqs).strip()]
-            cleaned[t_str] = list(dict.fromkeys(p_list))
-
-        self.prerequisites_by_subject[subj_key] = cleaned
-        return len(cleaned)
-
-    def _load_prerequisites(self, prerequisites_file: Optional[str] = None) -> Dict[str, List[str]]:
-        """
-        Loads topic prerequisites from the JSON folder / file.
-        Partitions prerequisites and documents strictly by subject dynamically (DSA, ML, or any new subject).
-        """
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        cleaned: Dict[str, List[str]] = {}
-        by_subject: Dict[str, Dict[str, List[str]]] = {}
-        docs_by_subj: Dict[str, Set[str]] = {}
-        target_files = []
-
-        # Load existing subject_documents.json if present
-        subject_doc_file = os.path.join(self.documents_dir, "subject_documents.json") if self.documents_dir else ""
-        saved_doc_map: Dict[str, str] = {}
-        if subject_doc_file and os.path.isfile(subject_doc_file):
-            try:
-                with open(subject_doc_file, "r", encoding="utf-8") as smf:
-                    saved_doc_map = json.load(smf)
-                for doc, s_val in saved_doc_map.items():
-                    s_key = str(s_val).strip().upper()
-                    if s_key not in docs_by_subj:
-                        docs_by_subj[s_key] = set()
-                    docs_by_subj[s_key].add(os.path.basename(doc))
-            except Exception as e:
-                print(f"[Notice] Could not read subject_documents.json: {e}")
-
-        if prerequisites_file and os.path.exists(prerequisites_file):
-            if os.path.isdir(prerequisites_file):
-                for f in sorted(os.listdir(prerequisites_file)):
-                    if f.lower().endswith(".json"):
-                        target_files.append(os.path.join(prerequisites_file, f))
-            else:
-                target_files.append(prerequisites_file)
-        else:
-            for folder in ["prerequisites", "JSONS", "JSON"]:
-                folder_path = os.path.join(base_dir, folder)
-                if os.path.exists(folder_path):
-                    for f in sorted(os.listdir(folder_path)):
-                        if f.lower().endswith(".json"):
-                            target_files.append(os.path.join(folder_path, f))
-
-        for file_path in target_files:
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                raw_prereqs = {}
-                if isinstance(data, dict) and "prerequisites" in data and isinstance(data["prerequisites"], dict):
-                    raw_prereqs = data["prerequisites"]
-                elif isinstance(data, dict) and "topics" in data and isinstance(data["topics"], list):
-                    raw_prereqs = {
-                        item["topic"]: item.get("prerequisites", [])
-                        for item in data["topics"]
-                        if isinstance(item, dict) and "topic" in item
-                    }
-                elif isinstance(data, dict):
-                    raw_prereqs = {k: v for k, v in data.items() if k not in ("document", "topics", "subject", "topics_count")}
-                elif isinstance(data, list):
-                    raw_prereqs = {
-                        item["topic"]: item.get("prerequisites", [])
-                        for item in data
-                        if isinstance(item, dict) and "topic" in item
-                    }
-
-                # Determine subject from JSON metadata or fallback to filename inference
-                file_subject = ""
-                if isinstance(data, dict) and data.get("subject"):
-                    file_subject = str(data["subject"]).strip().upper()
-                if not file_subject:
-                    f_lower = os.path.basename(file_path).lower()
-                    if "dsa" in f_lower or "data_structure" in f_lower:
-                        file_subject = "DSA"
-                    elif "ml" in f_lower or "machine_learning" in f_lower or "deep" in f_lower or "cse-3-1" in f_lower:
-                        file_subject = "ML"
-                    else:
-                        file_subject = "DSA"
-
-                # Track document associated with this subject
-                doc_name = ""
-                if isinstance(data, dict) and data.get("document"):
-                    doc_name = os.path.basename(str(data["document"]).strip())
-                elif file_path.endswith("_prerequisites.json"):
-                    stem = os.path.basename(file_path)[:-len("_prerequisites.json")]
-                    doc_name = f"{stem}.pdf"
-
-                if file_subject not in docs_by_subj:
-                    docs_by_subj[file_subject] = set()
+    def get_documents_for_subject(self, subject: Optional[str] = None) -> Set[str]:
+        """Fetch active document filenames for a given subject directly from MongoDB Atlas."""
+        if not subject:
+            return set()
+        subj_key = str(subject).strip().upper()
+        db = get_db()
+        if db is None:
+            return set()
+        try:
+            cursor = db.documents.find({"subject": subj_key}, {"name": 1, "filename": 1, "_id": 0})
+            docs = set()
+            for doc in cursor:
+                doc_name = doc.get("name") or doc.get("filename")
                 if doc_name:
-                    docs_by_subj[file_subject].add(doc_name)
-                    if doc_name not in saved_doc_map:
-                        saved_doc_map[doc_name] = file_subject
+                    docs.add(doc_name)
+            return docs
+        except Exception as e:
+            print(f"[Warning] Failed to fetch {subj_key} documents from MongoDB: {e}")
+            return set()
 
-                if file_subject not in by_subject:
-                    by_subject[file_subject] = {}
-
-                for topic, prereqs in raw_prereqs.items():
-                    topic_str = str(topic).strip()
-                    if not topic_str:
-                        continue
-                    if isinstance(prereqs, list):
-                        p_list = [str(p).strip() for p in prereqs if str(p).strip()]
-                    elif prereqs is None:
-                        p_list = []
-                    else:
-                        p_list = [str(prereqs).strip()]
-
-                    # Merge prerequisites without overwriting non-empty lists with empty ones
-                    existing = by_subject[file_subject].get(topic_str, [])
-                    combined = list(dict.fromkeys(existing + p_list))
-                    cleaned[topic_str] = combined
-                    by_subject[file_subject][topic_str] = combined
-
-            except Exception as e:
-                print(f"Warning: Could not load prerequisites from {file_path}: {e}")
-
-        # Sync unassigned local PDFs in documents_dir to a subject based on inference
-        if self.documents_dir and os.path.isdir(self.documents_dir):
-            for name in os.listdir(self.documents_dir):
-                if name.lower().endswith(".pdf") and os.path.isfile(os.path.join(self.documents_dir, name)):
-                    if name not in saved_doc_map:
-                        nl = name.lower()
-                        inferred_subj = "ML" if ("ml" in nl or "machine" in nl or "deep" in nl or "cse-3-1" in nl) else "DSA"
-                        saved_doc_map[name] = inferred_subj
-                        if inferred_subj not in docs_by_subj:
-                            docs_by_subj[inferred_subj] = set()
-                        docs_by_subj[inferred_subj].add(name)
-
-        # Save synchronized mapping back to subject_documents.json
-        if subject_doc_file and saved_doc_map:
-            try:
-                with open(subject_doc_file, "w", encoding="utf-8") as smf:
-                    json.dump(saved_doc_map, smf, indent=2)
-            except Exception as e:
-                print(f"[Notice] Could not write subject_documents.json: {e}")
-
-        self.prerequisites_by_subject = by_subject
-        self.documents_by_subject = docs_by_subj
-        return cleaned
 
     def identify_topic_from_rag(
         self,
@@ -438,32 +316,55 @@ class ResponseGenerator:
 
     def _is_active_document(self, document_name: Optional[str], subject: Optional[str] = None) -> bool:
         """Prevent stale vector records or cross-subject documents from being used."""
-        if not self.documents_dir or not document_name:
-            return True
-        doc_base = os.path.basename(document_name)
-        if not os.path.isfile(os.path.join(self.documents_dir, doc_base)):
+        if not document_name:
             return False
+        doc_base = os.path.basename(document_name)
+
+        # 1. Subject isolation check via MongoDB Atlas
         if subject:
-            subj_key = subject.strip().upper()
-            allowed = self.documents_by_subject.get(subj_key, set())
-            if doc_base not in allowed:
+            subj_key = str(subject).strip().upper()
+            allowed = self.get_documents_for_subject(subj_key)
+            if allowed and doc_base not in allowed:
                 return False
+
+        # 2. Physical disk verification
+        if self.documents_dir:
+            candidates = [
+                os.path.join(self.documents_dir, doc_base),
+            ]
+            if subject:
+                candidates.insert(0, os.path.join(self.documents_dir, str(subject).strip().lower(), doc_base))
+                candidates.insert(1, os.path.join(self.documents_dir, str(subject).strip().upper(), doc_base))
+
+            exists_on_disk = any(os.path.isfile(c) for c in candidates)
+            if not exists_on_disk:
+                return False
+
         return True
 
     def _active_document_names(self, subject: Optional[str] = None) -> List[str]:
         """Returns sorted list of valid PDF document filenames for the specified subject."""
+        if subject:
+            subj_key = str(subject).strip().upper()
+            mongo_docs = self.get_documents_for_subject(subj_key)
+            if mongo_docs:
+                return sorted(mongo_docs)
+
         if not self.documents_dir or not os.path.isdir(self.documents_dir):
             return []
-        
-        all_pdfs = {
-            name for name in os.listdir(self.documents_dir)
-            if name.lower().endswith(".pdf") and os.path.isfile(os.path.join(self.documents_dir, name))
-        }
 
+        search_dirs = [self.documents_dir]
         if subject:
-            subj_key = subject.strip().upper()
-            allowed_for_subj = self.documents_by_subject.get(subj_key, set())
-            return sorted(name for name in all_pdfs if name in allowed_for_subj)
+            subj_lower = os.path.join(self.documents_dir, str(subject).strip().lower())
+            if os.path.isdir(subj_lower):
+                search_dirs.append(subj_lower)
+
+        all_pdfs = set()
+        for d in search_dirs:
+            if os.path.isdir(d):
+                for name in os.listdir(d):
+                    if name.lower().endswith(".pdf") and os.path.isfile(os.path.join(d, name)):
+                        all_pdfs.add(name)
 
         return sorted(all_pdfs)
 
@@ -807,7 +708,7 @@ class ResponseGenerator:
         """
         subj_key = (subject or "").strip().upper()
         if subj_key:
-            subj_topics_map = self.prerequisites_by_subject.get(subj_key, {})
+            subj_topics_map = self.get_prerequisites_for_subject(subj_key)
             all_topics = list(subj_topics_map.keys())
         else:
             all_topics = list(self.prerequisites_data.keys())

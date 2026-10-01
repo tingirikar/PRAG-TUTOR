@@ -19,6 +19,7 @@ import './StudentDashboard.css'
 function SubjectIcon({ code, size = 22 }) {
   if (code === 'ML') return <Brain size={size} strokeWidth={1.75} />
   if (code === 'DSA') return <Binary size={size} strokeWidth={1.75} />
+  if (code === 'CN' || code === 'NETWORKS') return <Globe size={size} strokeWidth={1.75} />
   return <BookOpen size={size} strokeWidth={1.75} />
 }
 
@@ -272,6 +273,13 @@ export default function StudentDashboard() {
       description: 'Explore supervised & unsupervised learning, cost functions, gradient descent, neural networks, and evaluation.',
       teacherUsername: 'teacher_ml',
       teacherName: 'Prof. Alan (ML Faculty)'
+    },
+    {
+      code: 'CN',
+      name: 'Computer Networks',
+      description: 'OSI & TCP/IP stack, routing protocols, flow control, congestion avoidance, sockets, and network security.',
+      teacherUsername: 'teacher_cn',
+      teacherName: 'Dr. Kevin (CN Faculty)'
     }
   ])
   const [selectedSubject, setSelectedSubject] = useState(null)
@@ -289,7 +297,7 @@ export default function StudentDashboard() {
   const [sampleQuestions, setSampleQuestions] = useState([])
   const [refreshingQuestions, setRefreshingQuestions] = useState(false)
   const [expandedSources, setExpandedSources] = useState({})
-  const [imageMode, setImageMode] = useState('notes')
+  const [imageMode, setImageMode] = useState('none')
   const [model, setModel] = useState('openai/gpt-oss-20b')
   const [provider, setProvider] = useState('groq')
   const [cloudModels, setCloudModels] = useState([
@@ -369,6 +377,7 @@ export default function StudentDashboard() {
     setCurrentConversationId(null)
     setMessages([])
     setInput('')
+    setImageMode('none')
     fetchSampleQuestions(subj.code)
     fetchConversations(subj.code)
   }
@@ -427,6 +436,7 @@ export default function StudentDashboard() {
     setMessages([])
     setExpandedSources({})
     setInput('')
+    setImageMode('none')
   }
 
   const scrollToBottom = () => {
@@ -568,7 +578,14 @@ export default function StudentDashboard() {
         fetch('/api/query/images', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, topic: data.topic || '', mode: 'notes', subject: selectedSubject.code }),
+          body: JSON.stringify({
+            query,
+            topic: data.topic || '',
+            mode: 'notes',
+            subject: selectedSubject.code,
+            conversationId: data.conversationId || currentConversationId,
+            messageId: assistantMessageId,
+          }),
         })
           .then(async imageRes => {
             const imageData = await imageRes.json()

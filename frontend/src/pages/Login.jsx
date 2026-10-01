@@ -2,12 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Login.css'
 
-// Pre-given credentials
-const USERS = {
-  teacher: { username: 'teacher', password: 'teacher123', role: 'teacher' },
-  student: { username: 'student', password: 'student123', role: 'student' },
-}
-
 export default function Login() {
   const [role, setRole] = useState('student')
   const [username, setUsername] = useState(role === 'student' ? 'student' : 'teacher_dsa')
@@ -141,9 +135,7 @@ export default function Login() {
             <div>
               <p style={{ margin: '3px 0' }}>DSA Faculty: <strong>teacher_dsa</strong> / <strong>dsa123</strong></p>
               <p style={{ margin: '3px 0' }}>ML Faculty: <strong>teacher_ml</strong> / <strong>ml123</strong></p>
-              <p style={{ margin: '3px 0' }}>OS Faculty: <strong>teacher_os</strong> / <strong>os123</strong></p>
-              <p style={{ margin: '3px 0' }}>DBMS Faculty: <strong>teacher_dbms</strong> / <strong>dbms123</strong></p>
-              <p style={{ margin: '3px 0' }}>Networks Faculty: <strong>teacher_networks</strong> / <strong>networks123</strong></p>
+              <p style={{ margin: '3px 0' }}>CN Faculty: <strong>teacher_cn</strong> / <strong>cn123</strong></p>
             </div>
           )}
         </div>
