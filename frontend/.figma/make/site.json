@@ -1,0 +1,10 @@
+{
+  "description": "Delivers a sleek, responsive chat interface optimized for seamless conversations across devices, enhancing user engagement with a modern, intuitive design.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
