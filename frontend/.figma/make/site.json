@@ -1,5 +1,6 @@
 {
-  "description": "Delivers a sleek, responsive chat interface optimized for seamless conversations across devices, enhancing user engagement with a modern, intuitive design.",
+  "title": "PRAG Tutor — AI-Powered Personalized Course Tutor",
+  "description": "Personalized AI course tutoring grounded in real textbooks and syllabus materials with diagram support.",
   "robots": {
     "index": false
   },
