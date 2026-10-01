@@ -3,14 +3,14 @@ import SubjectIcon from '../ui/SubjectIcon'
 
 export default function ChatWelcome({ subject, refreshing, questions, onRefresh, onSelect }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl animate-rise flex-col items-center pt-6 text-center sm:pt-14">
-      <div className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-accent-soft to-panel text-accent ring-1 ring-line-strong">
+    <div className="mx-auto flex w-full max-w-5xl xl:max-w-6xl animate-rise flex-col items-center pt-6 text-center sm:pt-12">
+      <div className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-accent-soft to-panel text-accent ring-1 ring-slate-300">
         <SubjectIcon code={subject.code} size={26} />
       </div>
-      <h3 className="mt-6 text-2xl font-semibold tracking-tight text-fg sm:text-[1.9rem]">
+      <h3 className="mt-6 text-2xl font-bold tracking-tight text-slate-900 sm:text-[2rem]">
         Welcome to <span className="font-serif font-normal italic text-accent">{subject.name}</span> Tutor
       </h3>
-      <p className="mt-3 max-w-md text-[15px] text-dim">
+      <p className="mt-3 max-w-lg text-[15.5px] leading-relaxed text-slate-700">
         Ask any question related to {subject.code} course materials.
         I'll explain concepts at your chosen level.
       </p>
@@ -18,21 +18,21 @@ export default function ChatWelcome({ subject, refreshing, questions, onRefresh,
       {refreshing || questions.length > 0 ? (
         <div className="mt-10 w-full text-left">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="font-mono text-[11px] tracking-[0.14em] text-mute uppercase">Sample Questions from Course Materials</span>
+            <span className="font-mono text-[11px] font-semibold tracking-[0.14em] text-slate-700 uppercase">Sample Questions from Course Materials</span>
             <button
               type="button"
               onClick={onRefresh}
               disabled={refreshing}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] text-dim hover:bg-hover hover:text-fg disabled:opacity-60"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-60"
             >
               {refreshing ? 'Refreshing...' : <><RefreshCw size={13} /> Refresh Questions</>}
             </button>
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2">
+          <div className="grid gap-3.5 sm:grid-cols-2">
             {refreshing
               ? Array.from({ length: 4 }).map((_, idx) => (
-                  <div key={`skel-${idx}`} className="rounded-xl border border-line bg-panel p-4">
+                  <div key={`skel-${idx}`} className="rounded-xl border border-slate-200 bg-white p-4.5">
                     <div className="flex gap-2">
                       <span className="skeleton h-5 w-20 rounded-full" />
                       <span className="skeleton h-5 w-14 rounded-full" />
@@ -46,13 +46,13 @@ export default function ChatWelcome({ subject, refreshing, questions, onRefresh,
                     type="button"
                     key={idx}
                     onClick={() => onSelect(sq)}
-                    className="group relative rounded-xl border border-line bg-panel p-4 text-left transition-all hover:border-accent/40 hover:shadow-[0_8px_24px_-14px_#3b5bfd55]"
+                    className="group relative rounded-xl border border-slate-200 bg-white p-4.5 text-left shadow-xs transition-all hover:border-accent hover:shadow-[0_8px_24px_-14px_#3b5bfd55]"
                   >
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-strong">{sq.topic}</span>
-                      <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-mute capitalize">{sq.level}</span>
+                      <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent-strong">{sq.topic}</span>
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 capitalize">{sq.level}</span>
                     </div>
-                    <div className="mt-2.5 text-[14px] leading-snug text-fg">{sq.question}</div>
+                    <div className="mt-3 text-[14px] font-medium leading-snug text-slate-900">{sq.question}</div>
                   </button>
                 ))}
           </div>

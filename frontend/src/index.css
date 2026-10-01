@@ -6,23 +6,23 @@
   --font-mono: 'Geist Mono', ui-monospace, monospace;
   --font-serif: 'Instrument Serif', Georgia, serif;
 
-  --color-ink: #f5f7fb;
-  --color-rail: #eef1f8;
+  --color-ink: #f8fafc;
+  --color-rail: #f1f5f9;
   --color-panel: #ffffff;
-  --color-raised: #f2f4fa;
-  --color-hover: #e9edf6;
-  --color-line: #e2e6f0;
-  --color-line-strong: #cdd4e5;
-  --color-fg: #0f1630;
-  --color-dim: #4a5372;
-  --color-mute: #7c85a3;
-  --color-accent: #3b5bfd;
-  --color-accent-strong: #2846e6;
-  --color-accent-soft: #3b5bfd14;
-  --color-sky: #0a8bd0;
-  --color-violet: #7457f0;
-  --color-danger: #e23a52;
-  --color-warn: #b9740a;
+  --color-raised: #f1f5f9;
+  --color-hover: #e2e8f0;
+  --color-line: #cbd5e1;
+  --color-line-strong: #94a3b8;
+  --color-fg: #0f172a;
+  --color-dim: #334155;
+  --color-mute: #64748b;
+  --color-accent: #2563eb;
+  --color-accent-strong: #1d4ed8;
+  --color-accent-soft: #2563eb14;
+  --color-sky: #0284c7;
+  --color-violet: #6d28d9;
+  --color-danger: #dc2626;
+  --color-warn: #d97706;
 }
 
 @layer base {

@@ -11,25 +11,25 @@ export default function ThinkingPanel({ open, onToggle, steps }) {
         <button
           type="button"
           onClick={onToggle}
-          className="inline-flex items-center gap-2 rounded-lg py-1 text-sm text-dim hover:text-fg"
+          className="inline-flex items-center gap-2 rounded-lg py-1 text-sm font-semibold text-slate-900 hover:text-accent"
         >
-          <span className="bg-gradient-to-r from-dim via-fg to-dim bg-[length:200%_100%] bg-clip-text font-medium text-transparent [animation:shimmer_2.2s_linear_infinite]">
+          <span className="bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-700 bg-[length:200%_100%] bg-clip-text font-semibold text-transparent [animation:shimmer_2.2s_linear_infinite]">
             Thinking & Retrieval Pipeline
           </span>
-          <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown size={15} className={`text-slate-600 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
         {open && (
-          <div className="mt-2 space-y-2 border-l border-line pl-4">
+          <div className="mt-2 space-y-2 border-l-2 border-slate-200 pl-4">
             {steps.map((step, idx) => (
               <div
                 key={idx}
                 className={`flex items-center gap-2.5 text-[13px] ${
-                  step.status === 'done' ? 'text-dim' : step.status === 'active' ? 'text-fg' : 'text-mute'
+                  step.status === 'done' ? 'text-slate-700 font-normal' : step.status === 'active' ? 'text-slate-950 font-semibold' : 'text-slate-400'
                 }`}
               >
-                <span className={step.status === 'done' ? 'text-sky' : step.status === 'active' ? 'text-accent' : ''}>
-                  {step.status === 'done' ? <Check size={14} /> : step.status === 'active' ? <CircleDot size={14} className="animate-pulse" /> : <Circle size={14} />}
+                <span className={step.status === 'done' ? 'text-emerald-600' : step.status === 'active' ? 'text-accent' : 'text-slate-300'}>
+                  {step.status === 'done' ? <Check size={14} className="stroke-[3]" /> : step.status === 'active' ? <CircleDot size={14} className="animate-pulse" /> : <Circle size={14} />}
                 </span>
                 <span>{step.label}</span>
               </div>

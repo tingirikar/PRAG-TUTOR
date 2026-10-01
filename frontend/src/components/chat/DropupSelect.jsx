@@ -46,10 +46,10 @@ export default function DropupSelect({
       onClick={() => !opt.disabled && handleSelect(opt.value)}
       className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors ${
         opt.disabled
-          ? 'cursor-not-allowed text-mute italic'
+          ? 'cursor-not-allowed text-slate-400 italic'
           : value === opt.value
-            ? 'bg-accent-soft text-accent-strong'
-            : 'text-dim hover:bg-hover hover:text-fg'
+            ? 'bg-accent-soft font-medium text-accent-strong'
+            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
       }`}
     >
       <span className="min-w-0 truncate">{opt.label}</span>
@@ -67,12 +67,14 @@ export default function DropupSelect({
         aria-expanded={open}
         aria-haspopup="listbox"
         className={`flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-medium transition-colors disabled:opacity-50 ${
-          open ? 'border-line-strong bg-hover text-fg' : 'border-transparent text-dim hover:bg-hover hover:text-fg'
+          open
+            ? 'border-accent bg-accent-soft text-accent-strong'
+            : 'border-slate-200 bg-white text-slate-800 hover:bg-slate-100 hover:text-slate-900'
         }`}
       >
-        {icon && <span className="shrink-0 text-mute">{icon}</span>}
+        {icon && <span className="shrink-0 text-slate-500">{icon}</span>}
         <span className="truncate">{label}</span>
-        <ChevronUp size={13} className={`shrink-0 text-mute transition-transform ${open ? '' : 'rotate-180'}`} />
+        <ChevronUp size={13} className={`shrink-0 text-slate-500 transition-transform ${open ? '' : 'rotate-180'}`} />
       </button>
 
       {open && (

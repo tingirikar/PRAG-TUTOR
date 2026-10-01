@@ -12,7 +12,7 @@ import MessageBubble from '../components/chat/MessageBubble'
 import ThinkingPanel from '../components/chat/ThinkingPanel'
 import Composer from '../components/chat/Composer'
 import Lightbox from '../components/chat/Lightbox'
-import { ArrowUpRight, LayoutGrid } from 'lucide-react'
+import { ArrowUpRight, LayoutGrid, RefreshCw } from 'lucide-react'
 
 export default function StudentDashboard() {
   const navigate = useNavigate()
@@ -554,7 +554,7 @@ export default function StudentDashboard() {
 
         {/* Messages Feed */}
         <div className="min-h-0 flex-1 overflow-y-auto scroll-none">
-          <div className="mx-auto w-full max-w-3xl space-y-8 px-4 py-8 sm:px-6">
+          <div className="mx-auto w-full max-w-5xl xl:max-w-6xl space-y-6 px-4 py-6 sm:px-8">
             {messages.length === 0 && !loading && (
               <ChatWelcome
                 subject={selectedSubject}
@@ -577,6 +577,45 @@ export default function StudentDashboard() {
               />
             ))}
 
+            {/* Explore Next inside scrollable message stream:
+                - Sticks to the end of the chat
+                - Scrolls down out of view when scrolling up to read chat history
+                - Clicking populates input; sending hides it until answer finishes
+            */}
+            {messages.length > 0 && !loading && sampleQuestions.length > 0 && (
+              <div className="pt-2 animate-rise">
+                <div className="mb-2.5 flex items-center justify-between">
+                  <span className="font-mono text-[11px] font-semibold tracking-[0.14em] text-slate-700 uppercase">
+                    Explore next:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fetchSampleQuestions(selectedSubject.code)}
+                    disabled={refreshingQuestions}
+                    className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-slate-600 hover:text-accent disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={refreshingQuestions ? 'animate-spin' : ''} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {sampleQuestions.slice(0, 4).map((sq, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSelectSample(sq)}
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-xs transition hover:border-accent hover:bg-accent-soft hover:text-accent-strong"
+                    >
+                      <span className="text-[13px] font-medium leading-snug text-slate-800 group-hover:text-accent-strong">
+                        {sq.question}
+                      </span>
+                      <ArrowUpRight size={14} className="shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-accent" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {loading && (
               <ThinkingPanel
                 open={thinkingOpen}
@@ -591,27 +630,7 @@ export default function StudentDashboard() {
 
         {/* Composer area */}
         <div className="shrink-0 bg-gradient-to-t from-ink via-ink to-transparent px-3 pt-2 pb-3 sm:px-6 sm:pb-5">
-          <div className="mx-auto w-full max-w-3xl">
-            {messages.length > 0 && sampleQuestions.length > 0 && (
-              <div className="mb-2.5 flex flex-col gap-2">
-                <span className="shrink-0 font-mono text-[10.5px] tracking-[0.12em] text-mute uppercase">Explore next:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {sampleQuestions.slice(0, 4).map((sq, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => handleSelectSample(sq)}
-                      disabled={loading}
-                      className="group inline-flex items-center gap-1.5 rounded-full border border-line bg-panel py-1.5 pr-2.5 pl-3 text-left text-[12.5px] leading-snug text-dim transition hover:border-accent/40 hover:bg-accent-soft hover:text-accent-strong disabled:opacity-50"
-                    >
-                      <span>{sq.question}</span>
-                      <ArrowUpRight size={13} className="shrink-0 text-mute transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-accent" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
+          <div className="mx-auto w-full max-w-5xl xl:max-w-6xl">
             <Composer
               input={input}
               setInput={setInput}

@@ -18,26 +18,26 @@ export default function ChatSidebar({
         <button
           type="button"
           onClick={() => { onBack(); close() }}
-          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] text-dim hover:bg-hover hover:text-fg"
+          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950"
         >
           <ArrowLeft size={15} />
           <span>All Subjects</span>
         </button>
 
-        <div className="flex items-center gap-3 rounded-xl border border-line bg-panel p-3">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-2xs">
           <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
             <SubjectIcon code={subject.code} size={18} />
           </span>
           <div className="min-w-0">
-            <strong className="block font-mono text-[12px] font-medium tracking-wider text-accent">{subject.code}</strong>
-            <small className="block truncate text-[13px] text-fg">{subject.name}</small>
+            <strong className="block font-mono text-[12px] font-semibold tracking-wider text-accent">{subject.code}</strong>
+            <small className="block truncate text-[13px] font-medium text-slate-900">{subject.name}</small>
           </div>
         </div>
 
         <button
           type="button"
           onClick={() => { onNewChat(); close() }}
-          className="flex w-full items-center gap-2.5 rounded-xl border border-line-strong px-3 py-2.5 text-sm font-medium text-fg transition hover:border-accent/50 hover:bg-accent-soft"
+          className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 shadow-2xs transition hover:border-accent hover:bg-accent-soft hover:text-accent-strong"
         >
           <SquarePen size={16} className="text-accent" />
           <span>New Chat</span>
@@ -45,9 +45,9 @@ export default function ChatSidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 scroll-thin">
-        <div className="px-2 pt-3 pb-2 font-mono text-[10.5px] tracking-[0.16em] text-mute uppercase">Saved Conversations</div>
+        <div className="px-2 pt-3 pb-2 font-mono text-[10.5px] font-semibold tracking-[0.16em] text-slate-600 uppercase">Saved Conversations</div>
         {conversations.length === 0 ? (
-          <div className="px-2 py-2 text-[13px] leading-relaxed text-mute">No saved chats in {subject.code} yet. Start asking a question!</div>
+          <div className="px-2 py-2 text-[13px] leading-relaxed text-slate-500">No saved chats in {subject.code} yet. Start asking a question!</div>
         ) : (
           <div className="space-y-0.5">
             {conversations.map((conv) => {
@@ -62,10 +62,10 @@ export default function ChatSidebar({
                     close()
                   }}
                   className={`group flex h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] transition-colors ${
-                    confirming ? 'bg-hover text-fg' : active ? 'bg-hover text-fg' : 'text-dim hover:bg-panel hover:text-fg'
+                    confirming ? 'bg-slate-100 text-slate-900 font-medium' : active ? 'bg-blue-50/90 text-blue-700 font-semibold' : 'text-slate-700 hover:bg-white hover:text-slate-950'
                   }`}
                 >
-                  <MessageSquare size={14} className={`shrink-0 ${active ? 'text-accent' : 'text-mute'}`} />
+                  <MessageSquare size={14} className={`shrink-0 ${active ? 'text-accent' : 'text-slate-400'}`} />
                   <span className="min-w-0 flex-1 truncate" title={conv.title}>{conv.title}</span>
                   <button
                     type="button"
