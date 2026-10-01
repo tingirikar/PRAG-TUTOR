@@ -64,9 +64,19 @@ export default function DocumentsPanel({
                     <td className="px-5 py-3.5 font-mono text-[12.5px] text-dim">{formatSize(doc.size)}</td>
                     <td className="px-5 py-3.5 text-dim">{doc.uploadedAt}</td>
                     <td className="px-5 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-sky/25 bg-sky/10 px-2.5 py-0.5 text-[11.5px] text-sky capitalize">
-                        <span className="size-1.5 rounded-full bg-sky" />{doc.status}
-                      </span>
+                      {(() => {
+                        const isIndexed = String(doc.status).toLowerCase() === 'indexed'
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium capitalize ${
+                            isIndexed
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
+                              : 'border-sky/25 bg-sky/10 text-sky'
+                          }`}>
+                            <span className={`size-1.5 rounded-full ${isIndexed ? 'bg-emerald-500' : 'bg-sky'}`} />
+                            {doc.status}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td className="px-5 py-3.5">{actions(doc)}</td>
                   </tr>
@@ -77,19 +87,28 @@ export default function DocumentsPanel({
 
           {/* Mobile cards */}
           <div className="space-y-3 md:hidden">
-            {documents.map((doc) => (
-              <div key={doc.id} className="rounded-2xl border border-line bg-panel p-4">
-                <div className="flex items-start gap-3">
-                  <FileText size={18} className="mt-0.5 shrink-0 text-mute" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-fg">{doc.name}</div>
-                    <div className="mt-1 font-mono text-[11.5px] text-mute">{formatSize(doc.size)} · {doc.uploadedAt}</div>
+            {documents.map((doc) => {
+              const isIndexed = String(doc.status).toLowerCase() === 'indexed'
+              return (
+                <div key={doc.id} className="rounded-2xl border border-line bg-panel p-4">
+                  <div className="flex items-start gap-3">
+                    <FileText size={18} className="mt-0.5 shrink-0 text-mute" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-fg">{doc.name}</div>
+                      <div className="mt-1 font-mono text-[11.5px] text-mute">{formatSize(doc.size)} · {doc.uploadedAt}</div>
+                    </div>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${
+                      isIndexed
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
+                        : 'border-sky/25 bg-sky/10 text-sky'
+                    }`}>
+                      {doc.status}
+                    </span>
                   </div>
-                  <span className="shrink-0 rounded-full border border-sky/25 bg-sky/10 px-2 py-0.5 text-[11px] text-sky capitalize">{doc.status}</span>
+                  <div className="mt-3 border-t border-line pt-3">{actions(doc)}</div>
                 </div>
-                <div className="mt-3 border-t border-line pt-3">{actions(doc)}</div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </>
       )}
