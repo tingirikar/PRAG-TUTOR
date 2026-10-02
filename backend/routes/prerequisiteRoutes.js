@@ -5,12 +5,13 @@ import {
   updatePrerequisite,
   deletePrerequisite,
 } from '../controllers/prerequisiteController.js'
+import { requireAuth, requireRole } from '../middleware/auth.js'
 
 const router = Router()
 
-router.get('/', getPrerequisites)
-router.post('/', createPrerequisite)
-router.put('/', updatePrerequisite)
-router.delete('/', deletePrerequisite)
+router.get('/', requireAuth, getPrerequisites)
+router.post('/', requireAuth, requireRole('teacher'), createPrerequisite)
+router.put('/', requireAuth, requireRole('teacher'), updatePrerequisite)
+router.delete('/', requireAuth, requireRole('teacher'), deletePrerequisite)
 
 export default router

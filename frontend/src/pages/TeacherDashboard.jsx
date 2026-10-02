@@ -10,6 +10,7 @@ import DocumentsPanel from '../components/teacher/DocumentsPanel'
 import PrerequisitesPanel from '../components/teacher/PrerequisitesPanel'
 import TopicCard from '../components/teacher/TopicCard'
 import AddTopicModal from '../components/teacher/AddTopicModal'
+import { apiFetch } from '../api'
 
 const sanitizeFileName = (fileName) => {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -64,7 +65,7 @@ export default function TeacherDashboard() {
     }
     setIsSubmittingTopic(true)
     try {
-      const res = await fetch('/api/prerequisites', {
+      const res = await apiFetch('/api/prerequisites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +132,7 @@ export default function TeacherDashboard() {
   const handleSaveEdit = async (topic) => {
     setIsSavingEdit(true)
     try {
-      const res = await fetch('/api/prerequisites', {
+      const res = await apiFetch('/api/prerequisites', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -161,7 +162,7 @@ export default function TeacherDashboard() {
     }
     setIsDeletingTopic(true)
     try {
-      const res = await fetch('/api/prerequisites', {
+      const res = await apiFetch('/api/prerequisites', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -229,7 +230,7 @@ export default function TeacherDashboard() {
 
   const fetchDocuments = async () => {
     try {
-      const res = await fetch(`/api/documents?subject=${encodeURIComponent(teacherSubject)}`)
+      const res = await apiFetch(`/api/documents?subject=${encodeURIComponent(teacherSubject)}`)
       if (res.ok) {
         const data = await res.json()
         setDocuments(data.documents || [])
@@ -242,7 +243,7 @@ export default function TeacherDashboard() {
   const fetchPrerequisites = async () => {
     setLoadingPrereqs(true)
     try {
-      const res = await fetch(`/api/prerequisites?subject=${encodeURIComponent(teacherSubject)}`)
+      const res = await apiFetch(`/api/prerequisites?subject=${encodeURIComponent(teacherSubject)}`)
       if (res.ok) {
         const data = await res.json()
         setPrerequisites(data.prerequisites || {})
@@ -256,7 +257,7 @@ export default function TeacherDashboard() {
 
   const executeDeleteDocument = async (name) => {
     try {
-      const res = await fetch('/api/documents/delete', {
+      const res = await apiFetch('/api/documents/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: sanitizeFileName(name), subject: teacherSubject }),
@@ -311,6 +312,7 @@ export default function TeacherDashboard() {
 
       // 2. Stream real AI pipeline progress from Express SSE response (20% - 100%)
       let seenIndex = 0
+      let streamError = ''
       xhr.onprogress = () => {
         const fullText = xhr.responseText
         const chunk = fullText.slice(seenIndex)
@@ -326,6 +328,7 @@ export default function TeacherDashboard() {
             try {
               const data = JSON.parse(trimmed.slice(6))
               if (data.error) {
+                streamError = data.error
                 setFiles(prev => prev.map(x => x.id === fileObj.id ? {
                   ...x,
                   status: 'error',
@@ -350,7 +353,7 @@ export default function TeacherDashboard() {
       }
 
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
+        if (xhr.status >= 200 && xhr.status < 300 && !streamError) {
           setFiles(prev => prev.map(x => x.id === fileObj.id ? {
             ...x,
             status: 'done',
@@ -361,7 +364,7 @@ export default function TeacherDashboard() {
           fetchPrerequisites()
           resolve(true)
         } else {
-          let errorMsg = `Server error (${xhr.status})`
+          let errorMsg = streamError || `Server error (${xhr.status})`
           try {
             const errObj = JSON.parse(xhr.responseText)
             if (errObj.error) errorMsg = errObj.error
@@ -386,6 +389,8 @@ export default function TeacherDashboard() {
 
       xhr.open('POST', `/api/upload?stream=true&subject=${encodeURIComponent(teacherSubject)}`, true)
       xhr.setRequestHeader('Accept', 'text/event-stream')
+      const authToken = sessionStorage.getItem('authToken')
+      if (authToken) xhr.setRequestHeader('Authorization', `Bearer ${authToken}`)
       xhr.send(formData)
     })
   }
@@ -411,6 +416,7 @@ export default function TeacherDashboard() {
 
   const logout = () => {
     sessionStorage.removeItem('user')
+    sessionStorage.removeItem('authToken')
     navigate('/')
   }
 

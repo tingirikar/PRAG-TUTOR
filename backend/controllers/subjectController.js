@@ -8,6 +8,8 @@ export async function getSubjects(_request, response) {
       if (subjects.length > 0) return response.json({ subjects })
     }
     return response.json({
+      degraded: true,
+      warning: 'Database is unavailable or contains no subjects. Showing default subjects.',
       subjects: [
         {
           code: 'DSA',
@@ -36,6 +38,6 @@ export async function getSubjects(_request, response) {
       ]
     })
   } catch (err) {
-    response.status(500).json({ error: err.message })
+    return response.status(500).json({ error: err.message })
   }
 }

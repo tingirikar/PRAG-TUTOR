@@ -4,7 +4,7 @@ import SubjectIcon from '../ui/SubjectIcon'
 export default function ChatWelcome({ subject, refreshing, questions, onRefresh, onSelect }) {
   return (
     <div className="mx-auto flex w-full max-w-5xl xl:max-w-6xl animate-rise flex-col items-center pt-6 text-center sm:pt-12">
-      <div className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-accent-soft to-panel text-accent ring-1 ring-slate-300">
+      <div className="grid size-14 place-items-center rounded-2xl bg-linear-to-br from-accent-soft to-panel text-accent ring-1 ring-slate-300">
         <SubjectIcon code={subject.code} size={26} />
       </div>
       <h3 className="mt-6 text-2xl font-bold tracking-tight text-slate-900 sm:text-[2rem]">

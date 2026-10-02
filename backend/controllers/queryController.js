@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import Conversation from '../models/Conversation.js'
 import { isMongoReady } from '../config/db.js'
 import { callPython } from '../services/pythonService.js'
+import { isValidObjectId } from '../middleware/validation.js'
 
 export async function handleQuery(request, response) {
   const query = String(request.body?.query || request.body?.question || '').trim()
@@ -9,7 +10,7 @@ export async function handleQuery(request, response) {
 
   const subject = String(request.body?.subject || 'DSA').trim()
   const topic = request.body?.topic ? String(request.body.topic).trim() : null
-  const studentUsername = String(request.body?.studentUsername || 'student').trim()
+  const studentUsername = String(request.user?.username || request.body?.studentUsername || 'student').trim()
   let conversationId = request.body?.conversationId
 
   try {
@@ -32,10 +33,14 @@ export async function handleQuery(request, response) {
     })
 
     // 2. Persist to MongoDB conversation if available
-    if (isMongoReady()) {
+    const conversationPersistence = isMongoReady()
+    if (conversationPersistence) {
       let conversation = null
       if (conversationId) {
-        conversation = await Conversation.findById(conversationId)
+        if (!isValidObjectId(conversationId)) {
+          return response.status(400).json({ error: 'Invalid conversation ID.' })
+        }
+        conversation = await Conversation.findOne({ _id: conversationId, studentUsername })
       }
       if (!conversation) {
         const title = query.length > 38 ? `${query.slice(0, 38)}...` : query
@@ -60,6 +65,9 @@ export async function handleQuery(request, response) {
         content: result.response || result.answer || '',
         topic: result.topic || null,
         prerequisites: result.prerequisites || [],
+        exploreNext: result.explore_next || [],
+        rejected: Boolean(result.rejected),
+        status: result.status || null,
         sources: result.sources || [],
         images: result.images || [],
         model: result.model || request.body?.model,
@@ -73,7 +81,7 @@ export async function handleQuery(request, response) {
       await conversation.save()
     }
 
-    response.json({ ...result, conversationId })
+    return response.json({ ...result, conversationId, conversationPersistence })
   } catch (error) {
     response.status(error.status || 503).json({ error: error.message })
   }
@@ -82,15 +90,17 @@ export async function handleQuery(request, response) {
 export async function getModels(_request, response) {
   try {
     const result = await callPython('/rag/models', { timeout: 10000 })
-    response.json(result)
+    return response.json(result)
   } catch (error) {
-    response.json({
+    return response.status(503).json({
       models: [
         { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B (Default)' },
         { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B' },
         { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B' },
       ],
-      default: 'openai/gpt-oss-20b'
+      default: 'openai/gpt-oss-20b',
+      degraded: true,
+      error: 'Python model service is unavailable.'
     })
   }
 }
@@ -101,6 +111,7 @@ export async function handleQueryImages(request, response) {
 
   const conversationId = request.body?.conversationId
   const messageId = request.body?.messageId
+  const studentUsername = String(request.user?.username || request.body?.studentUsername || 'student').trim()
 
   try {
     const result = await callPython('/rag/images', {
@@ -118,7 +129,8 @@ export async function handleQueryImages(request, response) {
     // Persist discovered diagrams back to MongoDB conversation so they never disappear on reload
     if (isMongoReady() && conversationId && Array.isArray(result.images) && result.images.length > 0) {
       try {
-        const conv = await Conversation.findById(conversationId)
+        if (!isValidObjectId(conversationId)) return response.status(400).json({ error: 'Invalid conversation ID.' })
+        const conv = await Conversation.findOne({ _id: conversationId, studentUsername })
         if (conv && Array.isArray(conv.messages)) {
           let updated = false
           for (let i = conv.messages.length - 1; i >= 0; i--) {
@@ -139,7 +151,7 @@ export async function handleQueryImages(request, response) {
       }
     }
 
-    response.json(result)
+    return response.json(result)
   } catch (error) {
     response.status(error.status || 503).json({ error: error.message })
   }

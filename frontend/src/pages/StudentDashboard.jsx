@@ -12,6 +12,7 @@ import MessageBubble from '../components/chat/MessageBubble'
 import ThinkingPanel from '../components/chat/ThinkingPanel'
 import Composer from '../components/chat/Composer'
 import Lightbox from '../components/chat/Lightbox'
+import { apiFetch } from '../api'
 import { ArrowUpRight, LayoutGrid, RefreshCw } from 'lucide-react'
 
 export default function StudentDashboard() {
@@ -90,7 +91,7 @@ export default function StudentDashboard() {
 
   // Load subjects & available models on mount
   useEffect(() => {
-    fetch('/api/subjects')
+    apiFetch('/api/subjects')
       .then(res => res.json())
       .then(data => {
         if (data.subjects && data.subjects.length > 0) {
@@ -99,7 +100,7 @@ export default function StudentDashboard() {
       })
       .catch(err => console.warn('Could not load subjects from API:', err))
 
-    fetch('/api/models')
+    apiFetch('/api/models')
       .then(res => res.json())
       .then(data => {
         if (data.cloud_models && data.cloud_models.length > 0) setCloudModels(data.cloud_models)
@@ -114,7 +115,7 @@ export default function StudentDashboard() {
     setRefreshingQuestions(true)
     try {
       const seed = Math.random().toString(36).substring(2, 10)
-      const res = await fetch(`/api/sample-questions?seed=${seed}&subject=${subjectCode || 'DSA'}`)
+      const res = await apiFetch(`/api/sample-questions?seed=${seed}&subject=${subjectCode || 'DSA'}`)
       if (!res.ok) throw new Error('Could not refresh questions')
       const data = await res.json()
       if (data.questions && Array.isArray(data.questions) && data.questions.length > 0) {
@@ -133,7 +134,7 @@ export default function StudentDashboard() {
   const fetchConversations = async (subjectCode) => {
     const studentUser = JSON.parse(sessionStorage.getItem('user') || '{}')
     try {
-      const res = await fetch(`/api/conversations?studentUsername=${encodeURIComponent(studentUser.username || 'student')}&subject=${encodeURIComponent(subjectCode)}`)
+      const res = await apiFetch(`/api/conversations?studentUsername=${encodeURIComponent(studentUser.username || 'student')}&subject=${encodeURIComponent(subjectCode)}`)
       const data = await res.json()
       if (data.conversations) {
         setConversations(data.conversations)
@@ -167,7 +168,7 @@ export default function StudentDashboard() {
     if (loading || convId === currentConversationId) return
     try {
       setLoading(true)
-      const res = await fetch(`/api/conversations/${convId}`)
+      const res = await apiFetch(`/api/conversations/${convId}?studentUsername=${encodeURIComponent(currentUser.username || 'student')}`)
       const data = await res.json()
       if (data.conversation) {
         setCurrentConversationId(convId)
@@ -185,7 +186,7 @@ export default function StudentDashboard() {
   const confirmDelete = async (convId, e) => {
     e.stopPropagation()
     try {
-      await fetch(`/api/conversations/${convId}`, { method: 'DELETE' })
+      await apiFetch(`/api/conversations/${convId}?studentUsername=${encodeURIComponent(currentUser.username || 'student')}`, { method: 'DELETE' })
       setConversations(prev => prev.filter(c => c._id !== convId))
       setDeletingConvId(null)
       if (currentConversationId === convId) {
@@ -296,7 +297,7 @@ export default function StudentDashboard() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/query', {
+      const res = await apiFetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -336,9 +337,12 @@ export default function StudentDashboard() {
           content: answerText,
           topic: data.topic || null,
           prerequisites: data.prerequisites || [],
+          exploreNext: data.explore_next || [],
+          rejected: Boolean(data.rejected),
+          status: data.status || null,
           sources: data.sources || [],
           images: data.images || [],
-          imagesLoading: imageMode === 'notes',
+          imagesLoading: !data.rejected && imageMode === 'notes',
           level: chosenLevel,
           model: data.model || activeModelName,
           provider: data.provider || provider,
@@ -348,8 +352,8 @@ export default function StudentDashboard() {
 
       setLoading(false)
 
-      if (imageMode === 'notes') {
-        fetch('/api/query/images', {
+      if (imageMode === 'notes' && !data.rejected) {
+        apiFetch('/api/query/images', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -359,6 +363,7 @@ export default function StudentDashboard() {
             subject: selectedSubject.code,
             conversationId: data.conversationId || currentConversationId,
             messageId: assistantMessageId,
+            studentUsername: currentUser.username || 'student',
           }),
         })
           .then(async imageRes => {
@@ -418,8 +423,18 @@ export default function StudentDashboard() {
     })
   }
 
+  const handleSelectPrerequisite = (question, topic) => {
+    pendingSample.current = { question, topic }
+    setInput(question)
+    requestAnimationFrame(() => {
+      const el = document.getElementById('chat-composer')
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) }
+    })
+  }
+
   const logout = () => {
     sessionStorage.removeItem('user')
+    sessionStorage.removeItem('authToken')
     navigate('/')
   }
 
@@ -540,7 +555,7 @@ export default function StudentDashboard() {
     >
       <div className="flex h-full flex-col">
         {/* Desktop header */}
-        <div className="hidden h-14 shrink-0 items-center justify-between border-b border-line px-6 lg:flex [.rail-collapsed_&]:pl-16">
+        <div className="hidden h-14 shrink-0 items-center justify-between border-b border-line px-6 lg:flex in-[.rail-collapsed]:pl-16">
           <div className="flex min-w-0 items-center gap-2.5 text-sm">
             <span className="text-accent"><SubjectIcon code={selectedSubject.code} size={16} /></span>
             <span className="font-medium text-fg">{selectedSubject.name}</span>
@@ -573,6 +588,7 @@ export default function StudentDashboard() {
                 expanded={!!expandedSources[i]}
                 onToggleSources={toggleSources}
                 onOpenImage={setLightboxImage}
+                onAsk={handleSelectPrerequisite}
                 username={currentUser.username}
               />
             ))}
@@ -629,7 +645,7 @@ export default function StudentDashboard() {
         </div>
 
         {/* Composer area */}
-        <div className="shrink-0 bg-gradient-to-t from-ink via-ink to-transparent px-3 pt-2 pb-3 sm:px-6 sm:pb-5">
+        <div className="shrink-0 bg-linear-to-t from-ink via-ink to-transparent px-3 pt-2 pb-3 sm:px-6 sm:pb-5">
           <div className="mx-auto w-full max-w-5xl xl:max-w-6xl">
             <Composer
               input={input}

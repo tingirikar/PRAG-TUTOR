@@ -6,16 +6,19 @@ import {
   deleteDocument,
   proxyImage,
 } from '../controllers/documentController.js'
+import { requireAuth, requireRole } from '../middleware/auth.js'
 
 const router = Router()
 
 router.post(
   '/upload',
+  requireAuth,
+  requireRole('teacher'),
   upload.fields([{ name: 'file', maxCount: 20 }, { name: 'files', maxCount: 20 }]),
   uploadDocuments
 )
-router.get('/documents', getDocuments)
-router.post('/documents/delete', deleteDocument)
-router.get('/images/{*imagePath}', proxyImage)
+router.get('/documents', requireAuth, getDocuments)
+router.post('/documents/delete', requireAuth, requireRole('teacher'), deleteDocument)
+router.get('/images/{*imagePath}', requireAuth, proxyImage)
 
 export default router

@@ -1,6 +1,6 @@
 node_modules/
-.env
-*.pem
-uploads/
 __pycache__/
 dist/
+uploads/
+_nosync/
+.env

@@ -5,7 +5,8 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   name: { type: String, required: true },
   role: { type: String, enum: ['student', 'teacher'], required: true },
-  subject: { type: String, default: null }, // e.g. 'DSA', 'ML', 'OS'
+  enrolled: { type: String, required: true },
+  subject: { type: String, default: null }, // e.g. 'DSA', 'ML', 'CN'
 }, { timestamps: true })
 
 const User = mongoose.models.User || mongoose.model('User', userSchema)

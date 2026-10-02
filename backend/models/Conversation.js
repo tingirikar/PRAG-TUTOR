@@ -1,3 +1,8 @@
+/**
+ *  message Schema
+ *  conversation Schema
+**/
+
 import mongoose from 'mongoose'
 import { randomUUID } from 'node:crypto'
 

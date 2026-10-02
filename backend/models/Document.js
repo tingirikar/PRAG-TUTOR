@@ -2,9 +2,13 @@ import mongoose from 'mongoose'
 
 const documentSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  subject: { type: String, required: true, default: 'DSA', index: true },
+  subject: { type: String, required: true, default: 'DSA', index: true }, // 'DSA', 'ML', 'CN'
   size: { type: Number, required: true },
+  contentHash: { type: String, default: null },
   uploadedAt: { type: Date, default: Date.now },
+  indexedAt: { type: Date, default: null },
+  imageCount: { type: Number, default: 0 },
+  processingError: { type: String, default: null },
   status: { type: String, default: 'Uploaded' },
 }, { versionKey: false })
 

@@ -1,7 +1,11 @@
-import multer from 'multer'
-import path from 'node:path'
-import fs from 'node:fs'
-import { fileURLToPath } from 'node:url'
+/**
+ *
+**/
+
+import multer from 'multer';
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export const uploadDir = path.resolve(__dirname, '..', '..', 'uploads')
@@ -9,8 +13,8 @@ export const uploadDir = path.resolve(__dirname, '..', '..', 'uploads')
 export const upload = multer({
   storage: multer.diskStorage({
     destination: (req, _file, callback) => {
-      const subject = String(req.body?.subject || req.query?.subject || 'dsa').trim().toLowerCase()
-      const targetDir = path.join(uploadDir, subject)
+      const subject = String(req.body?.subject || req.query?.subject || 'notclear').trim().toLowerCase()
+      const targetDir = path.join(uploadDir, subject, 'documents')
       if (!fs.existsSync(targetDir)) {
         fs.mkdirSync(targetDir, { recursive: true })
       }

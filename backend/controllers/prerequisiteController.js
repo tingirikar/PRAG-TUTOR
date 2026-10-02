@@ -26,12 +26,11 @@ export async function getPrerequisites(request, response) {
         })
       }
     }
-    // Fallback to Python if MongoDB not ready or has no records
     const queryStr = subject ? `?subject=${encodeURIComponent(subject)}` : ''
     const result = await callPython(`/rag/prerequisites${queryStr}`, { timeout: 30000 })
-    response.json(result)
+    return response.json(result)
   } catch (error) {
-    response.status(error.status || 500).json({ error: error.message })
+    return response.status(error.status || 500).json({ error: error.message })
   }
 }
 
@@ -59,8 +58,6 @@ export async function createPrerequisite(request, response) {
         },
         { upsert: true, new: true }
       )
-
-
       return response.status(201).json({
         success: true,
         message: `Topic '${topicName}' added to ${subj}.`,
@@ -74,7 +71,7 @@ export async function createPrerequisite(request, response) {
     }
     return response.status(503).json({ error: 'Database is not ready.' })
   } catch (error) {
-    response.status(500).json({ error: error.message })
+    return response.status(500).json({ error: error.message })
   }
 }
 
@@ -100,8 +97,6 @@ export async function updatePrerequisite(request, response) {
       if (!doc) {
         return response.status(404).json({ error: `Topic '${topicName}' not found in ${subj}.` })
       }
-
-
       return response.json({
         success: true,
         message: `Prerequisites for '${topicName}' updated.`,
@@ -115,7 +110,7 @@ export async function updatePrerequisite(request, response) {
     }
     return response.status(503).json({ error: 'Database is not ready.' })
   } catch (error) {
-    response.status(500).json({ error: error.message })
+    return response.status(500).json({ error: error.message })
   }
 }
 
@@ -133,8 +128,6 @@ export async function deletePrerequisite(request, response) {
       if (!deleted) {
         return response.status(404).json({ error: `Topic '${topic}' not found in ${subject}.` })
       }
-
-
       return response.json({
         success: true,
         message: `Topic '${topic}' deleted from ${subject}.`,
@@ -143,6 +136,6 @@ export async function deletePrerequisite(request, response) {
     }
     return response.status(503).json({ error: 'Database is not ready.' })
   } catch (error) {
-    response.status(500).json({ error: error.message })
+    return response.status(500).json({ error: error.message })
   }
 }

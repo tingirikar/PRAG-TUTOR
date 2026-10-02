@@ -1,11 +1,11 @@
-pdfplumber
-sentence-transformers
-pinecone
-groq
+pymongo
+requests
 python-dotenv
 fastapi
 uvicorn[standard]
+sentence-transformers
+pdfplumber
 PyMuPDF
+pinecone
+groq
 Pillow
-requests
-pymongo

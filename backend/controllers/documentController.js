@@ -140,7 +140,7 @@ export async function getDocuments(request, response) {
 
     response.json({ documents: documents.map(document => ({ ...document, id: document.id || document._id?.toString() })) })
   } catch (error) {
-    response.status(500).json({ error: error.message })
+    return response.status(500).json({ error: error.message })
   }
 }
 
@@ -193,7 +193,7 @@ export async function proxyImage(request, response) {
     }
 
     // 2. Authentication check: user must provide valid student or teacher credentials
-    const username = (request.query?.u || request.headers['x-user'] || '').toString().trim()
+    const username = (request.user?.username || request.query?.u || request.headers['x-user'] || '').toString().trim()
     if (!username) {
       return response.status(401).json({ error: 'Unauthorized: login required to access course diagrams.' })
     }

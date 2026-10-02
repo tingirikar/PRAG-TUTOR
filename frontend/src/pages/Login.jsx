@@ -63,6 +63,7 @@ export default function Login() {
       }
 
       sessionStorage.setItem('user', JSON.stringify(data.user))
+        if (data.token) sessionStorage.setItem('authToken', data.token)
       if (data.user.role === 'teacher') {
         navigate('/teacher')
       } else {

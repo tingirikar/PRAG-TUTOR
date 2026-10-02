@@ -1,10 +1,9 @@
 import mongoose from 'mongoose'
 
 const subjectSchema = new mongoose.Schema({
-  code: { type: String, required: true, unique: true }, // e.g. 'DSA', 'ML', 'OS'
+  code: { type: String, required: true, unique: true }, // e.g. 'DSA', 'ML', 'CN'
   name: { type: String, required: true },
   description: { type: String, default: '' },
-  icon: { type: String, default: '📚' },
   teacherUsername: { type: String, default: '' },
   teacherName: { type: String, default: '' },
 }, { timestamps: true })

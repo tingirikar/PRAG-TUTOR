@@ -1,14 +1,11 @@
-"""
-Image handler for course document diagrams (Option C).
+"""Image handler for course document diagrams.
 
-Extracts and indexes genuine diagrams from course PDFs via PyMuPDF.
-Strictly returns authentic diagrams from course materials when notes mode
-is selected; returns empty for mermaid or none modes (as mermaid is rendered
-live in markdown). Zero fake fallbacks or synthetic AI image generation.
+Matches genuine diagrams extracted from course PDFs via PyMuPDF. Strictly
+returns authentic diagrams from course materials when notes mode is selected.
 """
 
-import os
 import json
+import os
 from typing import Any, Dict, List, Optional
 
 
@@ -24,13 +21,10 @@ class ImageHandler:
         top_k: int = 3,
         subject: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        Given RAG matches (which carry page_numbers in metadata),
-        looks up image_index.json for each matched document/page and
-        returns relevant extracted PDF image entries.
+        """Given RAG matches (which carry page_numbers in metadata), looks up image_index.json for each matched document/page and returns relevant extracted PDF image entries.
+
         Supports both subject-scoped directories and legacy flat paths.
         """
-        # Collect (document, page_number) pairs from matches
         doc_pages: Dict[str, set] = {}
         for match in matches:
             meta = (
@@ -59,29 +53,56 @@ class ImageHandler:
         if not doc_pages:
             return []
 
-        # Search image indexes for matching pages
         found_images: List[Dict[str, Any]] = []
 
         for doc_name, pages in doc_pages.items():
             safe_name = doc_name.replace(" ", "_").replace(".", "_")
             index_path = None
             if subject:
-                # 1. Isolated per-subject images: uploads/<subject>/images/<safe_name>/image_index.json
-                subj_path = os.path.join(self.images_dir, subject.strip().lower(), "images", safe_name, "image_index.json")
+                subj_path = os.path.join(
+                    self.images_dir,
+                    subject.strip().lower(),
+                    "images",
+                    safe_name,
+                    "image_index.json",
+                )
                 if os.path.exists(subj_path):
                     index_path = subj_path
                 else:
-                    subj_path_upper = os.path.join(self.images_dir, subject.strip().upper(), "images", safe_name, "image_index.json")
+                    subj_path_upper = os.path.join(
+                        self.images_dir,
+                        subject.strip().upper(),
+                        "images",
+                        safe_name,
+                        "image_index.json",
+                    )
                     if os.path.exists(subj_path_upper):
                         index_path = subj_path_upper
 
             if not index_path or not os.path.exists(index_path):
-                # 2. Legacy fallback: uploads/images/<subject>/<safe_name>/image_index.json
-                candidate = os.path.join(self.images_dir, "images", (subject or "").upper(), safe_name, "image_index.json")
+                candidate = os.path.join(
+                    self.images_dir,
+                    "images",
+                    (subject or "").upper(),
+                    safe_name,
+                    "image_index.json",
+                )
                 if os.path.exists(candidate):
                     index_path = candidate
-                elif os.path.exists(os.path.join(self.images_dir, "images", safe_name, "image_index.json")):
-                    index_path = os.path.join(self.images_dir, "images", safe_name, "image_index.json")
+                elif os.path.exists(
+                    os.path.join(
+                        self.images_dir,
+                        "images",
+                        safe_name,
+                        "image_index.json",
+                    )
+                ):
+                    index_path = os.path.join(
+                        self.images_dir,
+                        "images",
+                        safe_name,
+                        "image_index.json",
+                    )
 
             if not index_path or not os.path.exists(index_path):
                 continue
@@ -97,19 +118,26 @@ class ImageHandler:
                     stored_rel = img_entry.get("path", "")
                     img_path = os.path.join(self.images_dir, stored_rel)
                     if not os.path.isfile(img_path):
-                        alt_path = os.path.join(os.path.dirname(index_path), img_entry.get("filename", ""))
+                        alt_path = os.path.join(
+                            os.path.dirname(index_path),
+                            img_entry.get("filename", ""),
+                        )
                         if os.path.isfile(alt_path):
                             img_path = alt_path
-                            stored_rel = os.path.relpath(alt_path, self.images_dir).replace("\\", "/")
+                            stored_rel = os.path.relpath(
+                                alt_path, self.images_dir
+                            ).replace("\\", "/")
                         else:
                             continue
 
-                    found_images.append({
-                        "url": f"/images/{stored_rel}",
-                        "source": "document",
-                        "document": doc_name,
-                        "page": img_entry["page_number"],
-                    })
+                    found_images.append(
+                        {
+                            "url": f"/images/{stored_rel}",
+                            "source": "document",
+                            "document": doc_name,
+                            "page": img_entry["page_number"],
+                        }
+                    )
 
         # Deduplicate and limit to top_k
         seen = set()
@@ -130,8 +158,8 @@ class ImageHandler:
         mode: str = "notes",
         subject: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        Returns diagrams strictly according to the selected mode:
+        """Returns diagrams strictly according to the selected mode:
+
         - 'notes': ONLY genuine diagrams extracted from course PDFs. Zero fake fallbacks.
         - 'mermaid' / 'none': returns empty list (Mermaid is rendered interactively in chat).
         """

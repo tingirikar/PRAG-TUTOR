@@ -1,65 +1,48 @@
-# PRAG - TUTOR
-personalized rag intelligent tutoring system
+# PRAG-TUTOR
+it means Personlised RAG (Retrieval Augmented Generation) Tutor
+so what it means is, it is RAG + Personalization
+Personalization means
+- how much concept depth u want (beginner / intermediate / expert)
+- prerequisites (there is prerequistes option)
+- learner modelling (what students knows, what is his mastery in that concept)
 
-# HOW TO RUN
-
-## STEP 1 : .env file
-=> .env.example -> rename to .env
-=> fill api keys
-
-## STEP 2 : tutor/
-=> pip install requirements.txt
-
-## STEP 3 : running the project
-
-### Terminal 1 : cd tutor/
-```bash
-py -3.12 -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+## PRAG-TUTOR architecture
+so there are 4 folders
 ```
-we are using python version 3.12
-
-### Terminal 2 : cd backend/
-```bash
-node server.js
+- frontend/   # User Interface
+- backend/    # WEB logic
+- tutor/      # AI Engine
+- uploads/    # documents uploaded by teachers
 ```
+## USERS
+there are two users, students and teachers
+#### teachers
+- teachers can upload documents (currently restricted to pdf)
+- those documents are stored in uploads/ folder
+- those documents are chunked, embedded (using EMBEDDING MODEL) and those embeddings are 
+indexed and stored in pinecone vector database
+- images are also extracted from those documents
 
-### Terminal 3 : cd frontend/
-```bash
-npm run dev
-```
+> students
+- 
 
-# Folder Structure
+## WHY PRAG-TUTOR STANDS OUT
+> current AI like chatgpt, gemini, claude, etc..
+- we have to upload documents to get relevant explanations
+- they are trained on vast internet, so generated content feels outside
+- it has context, but is not focused on learning, its focused on general
+- it doesnt tract what user knows
+ex: if i ask it about 
 
-```text
-prag_tutor/
-  ├── .env
-  ├── .env.example
-  ├── .gitignore
-  ├── README.md
-  │
-  ├── frontend/
-  │    ├── package.json
-  │    ├── vite.config.js
-  │    ├── index.html
-  │    └── src/
-  │
-  ├── backend/
-  │    ├── package.json
-  │    ├── server.js
-  │    ├── config/
-  │    ├── controllers/
-  │    ├── models/
-  │    ├── routes/
-  │    ├── middleware/
-  │    └── services/
-  │
-  ├── tutor/
-  │    ├── main.py
-  │    ├── requirements.txt
-  │    └── ...
-  │
-  └── uploads/
-       ├── dsa/
-       └── ml/
-       └── ..
-```
+> PRAG-TUTOR 🔥
+- beginner / intermediate / expert level personalization
+- Learner modelling supports what students knows
+- prerequiste button helps them to learn prior concepts so learning becomes easy
+
+#### frontend/
+tech stack : react, lucide-react
+
+##### RESPONSIBILITY
+it is responsible for
+> provide UI for students and teachers
+> provide UI to navigate thr web pages
