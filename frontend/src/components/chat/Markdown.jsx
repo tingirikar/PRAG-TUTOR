@@ -113,11 +113,35 @@ function MermaidBlock({ code }) {
 
 function preprocessLaTeX(content) {
   if (!content) return ''
-  // Convert display math \[ ... \] to $$ ... $$
+  // 1. Convert display math \[ ... \] to $$ ... $$
   let processed = content.replace(/\\\[([\s\S]*?)\\\]/g, (_match, eq) => `$$\n${eq.trim()}\n$$`)
-  // Convert inline math \( ... \) to $ ... $
+  // 2. Convert inline math \( ... \) to $ ... $
   processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (_match, eq) => `$${eq.trim()}$`)
-  return processed
+
+  // 3. Fix unclosed $$ on single lines (e.g. LLM generates "$$ equation" without closing $$ before line break)
+  const lines = processed.split('\n')
+  const fixedLines = lines.map((line) => {
+    const trimmed = line.trim()
+    const matches = line.match(/\$\$/g)
+    if (matches && matches.length % 2 !== 0) {
+      return line.trimEnd() + ' $$'
+    }
+    // Automatically wrap standalone raw LaTeX math blocks (lines starting with \frac, \boxed, \partial, etc.)
+    if (
+      trimmed &&
+      !trimmed.startsWith('$') &&
+      !trimmed.startsWith('-') &&
+      !trimmed.startsWith('*') &&
+      !trimmed.startsWith('#') &&
+      /^\\[a-zA-Z]+/.test(trimmed) &&
+      !trimmed.startsWith('\\item')
+    ) {
+      return `$$ ${trimmed} $$`
+    }
+    return line
+  })
+
+  return fixedLines.join('\n')
 }
 
 export default function Markdown({ content }) {
@@ -126,7 +150,7 @@ export default function Markdown({ content }) {
     <div className="md">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false, errorColor: '#7c85a3' }]]}
         components={{
           code({ node, inline, className, children, ...props }) {
             const codeText = String(children || '').replace(/\n$/, '')

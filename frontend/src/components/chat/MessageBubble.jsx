@@ -144,7 +144,7 @@ export default function MessageBubble({ msg, index, expanded, onToggleSources, o
 
         {msg.prerequisites && msg.prerequisites.length > 0 && !msg.rejected && (
           <div className="rounded-xl border border-line bg-panel p-3.5 shadow-2xs">
-            <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-fg">
+            <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-fg">
               <BookOpen size={14} className="text-accent" />
               <span>Prerequisites</span>
             </div>
@@ -154,10 +154,10 @@ export default function MessageBubble({ msg, index, expanded, onToggleSources, o
                   type="button"
                   key={`${prerequisite}-${prerequisiteIndex}`}
                   onClick={() => onAsk?.(`Teach me ${prerequisite}`, prerequisite)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12px] font-medium text-ink transition hover:border-accent/40 hover:bg-accent/5 hover:text-accent shadow-xs"
+                  className="inline-flex items-center gap-2 rounded-lg border border-line bg-rail/60 px-3 py-1.5 text-[12.5px] font-medium text-fg transition hover:border-accent hover:bg-accent-soft hover:text-accent-strong shadow-2xs"
                 >
                   <span>{prerequisite}</span>
-                  <ArrowUpRight size={12} className="text-dim" />
+                  <ArrowUpRight size={13} className="text-dim" />
                 </button>
               ))}
             </div>
