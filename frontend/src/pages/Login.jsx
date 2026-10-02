@@ -82,7 +82,7 @@ export default function Login() {
   return (
     <div className="grid min-h-dvh bg-ink text-fg lg:grid-cols-[1.1fr_1fr]">
       {/* Brand panel */}
-      <aside className="grain dot-grid relative hidden flex-col justify-between overflow-hidden border-r border-line p-12 lg:flex xl:p-16">
+      <aside className="rail-dark dot-grid relative hidden flex-col justify-between overflow-hidden p-12 lg:flex xl:p-16">
         <Brand />
         <div className="max-w-xl">
           <p className="font-mono text-[11px] tracking-[0.25em] text-accent">AI · RAG · MULTI-SUBJECT</p>
