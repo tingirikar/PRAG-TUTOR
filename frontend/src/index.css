@@ -74,6 +74,34 @@
       radial-gradient(40rem 30rem at 110% 110%, #0a8bd012, transparent 60%);
   }
 
+  /* Bluish-black surface (login brand panel, dashboard sidebars).
+     Re-scopes the color tokens so everything inside reads light-on-dark. */
+  .rail-dark {
+    --color-rail: #0e1220;
+    --color-panel: #161b2e;
+    --color-raised: #1a2035;
+    --color-hover: #222a44;
+    --color-line: #262e48;
+    --color-line-strong: #36405f;
+    --color-fg: #eef1f8;
+    --color-dim: #b4bbd0;
+    --color-mute: #7d86a3;
+    --color-accent: #6b8cff;
+    --color-accent-strong: #8aa4ff;
+    --color-accent-soft: #6b8cff22;
+    background-color: #0e1220;
+    color: var(--color-fg);
+    color-scheme: dark;
+    box-shadow: 8px 0 30px rgba(10, 14, 30, 0.18);
+  }
+  .rail-dark .dot-grid,
+  .rail-dark.dot-grid {
+    background-image:
+      radial-gradient(120% 90% at 85% 0%, #2547ff47, transparent 55%),
+      radial-gradient(#ffffff12 1px, transparent 1px);
+    background-size: auto, 22px 22px;
+  }
+
   .dot-grid {
     background-image: radial-gradient(#0f163014 1px, transparent 1px);
     background-size: 22px 22px;
