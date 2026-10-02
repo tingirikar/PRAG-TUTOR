@@ -28,28 +28,53 @@ mermaid.initialize({
 function MermaidBlock({ code }) {
   const [svg, setSvg] = useState('')
   const [error, setError] = useState(false)
-  const idRef = useRef(`mermaid-${Math.random().toString(36).substring(2, 9)}`)
 
   useEffect(() => {
     let isMounted = true
     const cleanCode = (code || '').trim()
     if (!cleanCode) return
 
-    mermaid.render(idRef.current, cleanCode)
-      .then(({ svg }) => {
-        if (isMounted) {
-          setSvg(svg)
-          setError(false)
-        }
-      })
-      .catch((err) => {
-        console.warn('Mermaid render error:', err)
-        if (isMounted) setError(true)
-      })
+    const renderId = 'mmd-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now()
+
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        console.warn('Mermaid render timed out, falling back to code preview')
+        setError(true)
+      }
+    }, 2500)
+
+    try {
+      mermaid.render(renderId, cleanCode)
+        .then(({ svg: renderedSvg }) => {
+          if (isMounted) {
+            clearTimeout(timer)
+            setSvg(renderedSvg)
+            setError(false)
+          }
+        })
+        .catch((err) => {
+          console.warn('Mermaid render error:', err)
+          if (isMounted) {
+            clearTimeout(timer)
+            setError(true)
+          }
+        })
+        .finally(() => {
+          const el = document.getElementById(renderId)
+          if (el) el.remove()
+        })
+    } catch (err) {
+      console.warn('Mermaid synchronous error:', err)
+      if (isMounted) {
+        clearTimeout(timer)
+        setError(true)
+      }
+    }
 
     return () => {
       isMounted = false
-      const el = document.getElementById(idRef.current)
+      clearTimeout(timer)
+      const el = document.getElementById(renderId)
       if (el) el.remove()
     }
   }, [code])

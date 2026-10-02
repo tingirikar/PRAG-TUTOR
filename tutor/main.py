@@ -6,8 +6,15 @@ Routes incoming HTTP requests to dedicated document and query processing pipelin
 import json
 import os
 import queue
+import sys
 import threading
+from pathlib import Path
 from typing import Any, Dict, Optional
+
+# Ensure repository root is in sys.path regardless of execution working directory (e.g. AWS PM2 cwd)
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
