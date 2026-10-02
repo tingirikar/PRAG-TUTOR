@@ -22,7 +22,7 @@ export default function Composer({
   return (
     <form
       onSubmit={onSubmit}
-      className="rounded-[22px] border border-line-strong bg-panel shadow-[0_18px_50px_-28px_#1a245059] transition focus-within:border-accent/50 focus-within:shadow-[0_0_0_4px_#3b5bfd14,0_18px_50px_-28px_#1a245059]"
+      className="rounded-[24px] border border-line-strong bg-panel shadow-[0_1px_0_#fff_inset,0_24px_60px_-30px_#13172659] transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-accent/45 focus-within:shadow-[0_0_0_5px_#3247d612,0_30px_70px_-30px_#13172666]"
     >
       <textarea
         ref={ref}
@@ -91,7 +91,7 @@ export default function Composer({
           disabled={loading || !input.trim()}
           aria-label="Send"
           title="Send"
-          className="grid size-9 shrink-0 place-items-center rounded-full bg-fg text-white transition hover:bg-accent disabled:bg-raised disabled:text-mute"
+          className="grid size-9 shrink-0 place-items-center rounded-full press bg-fg text-white transition-all duration-300 hover:scale-105 hover:bg-accent hover:shadow-[0_8px_20px_-6px_#3247d6] disabled:scale-100 disabled:bg-raised disabled:text-mute disabled:shadow-none"
         >
           <ArrowUp size={18} strokeWidth={2.4} />
         </button>

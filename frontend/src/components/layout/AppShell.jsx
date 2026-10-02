@@ -1,42 +1,42 @@
 import { useEffect, useRef, useState } from 'react'
-import { Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
-import Brand from '../ui/Brand'
+import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 
-/**
- * Responsive two-pane shell: fixed rail on desktop, slide-in drawer on mobile.
- * On desktop the rail can be resized by dragging its edge and collapsed entirely.
- * `sidebar` is a render function receiving `close` so nav items can dismiss the drawer.
- */
 export default function AppShell({ sidebar, mobileTitle, children }) {
   const [open, setOpen] = useState(false)
-  const close = () => setOpen(false)
-  const [width, setWidth] = useState(() => Number(localStorage.getItem('rail-width')) || 280)
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('rail-collapsed') === '1')
+  const [collapsed, setCollapsed] = useState(false)
+  const [width, setWidth] = useState(() => {
+    const saved = localStorage.getItem('rail-width')
+    return saved ? Math.max(240, Math.min(420, parseInt(saved, 10))) : 280
+  })
   const [dragging, setDragging] = useState(false)
   const widthRef = useRef(width)
+  widthRef.current = width
 
-  useEffect(() => { localStorage.setItem('rail-collapsed', collapsed ? '1' : '0') }, [collapsed])
+  const close = () => setOpen(false)
 
+  // Drag-to-resize sidebar width
   const startResize = (e) => {
     e.preventDefault()
     setDragging(true)
     const startX = e.clientX
     const startW = widthRef.current
-    const onMove = (ev) => {
-      const next = Math.min(440, Math.max(220, startW + ev.clientX - startX))
-      widthRef.current = next
-      setWidth(next)
+
+    const onPointerMove = (ev) => {
+      const nextW = Math.max(240, Math.min(460, startW + (ev.clientX - startX)))
+      setWidth(nextW)
+      widthRef.current = nextW
     }
-    const onUp = () => {
+    const onPointerUp = () => {
       setDragging(false)
       localStorage.setItem('rail-width', String(widthRef.current))
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
     }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
   }
 
+  // Close drawer on Escape
   useEffect(() => {
     if (!open) return
     const onKey = (e) => e.key === 'Escape' && setOpen(false)
@@ -48,12 +48,12 @@ export default function AppShell({ sidebar, mobileTitle, children }) {
     <div className={`flex h-dvh overflow-hidden bg-ink text-fg ${dragging ? 'cursor-col-resize select-none' : ''} ${collapsed ? 'rail-collapsed' : ''}`} style={{ '--rail-w': `${width}px` }}>
       {/* Mobile scrim */}
       <div
-        className={`fixed inset-0 z-40 bg-[#0f1630]/40 backdrop-blur-sm transition-opacity lg:hidden ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        className={`fixed inset-0 z-40 bg-[#0b0f1e]/45 backdrop-blur-sm transition-opacity lg:hidden ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
         onClick={close}
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[280px] shrink-0 flex-col border-r border-line bg-rail transition-transform duration-300 ease-out lg:relative lg:w-[var(--rail-w)] lg:translate-x-0 lg:transition-none ${open ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'lg:hidden' : ''}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-[280px] shrink-0 flex-col rail-dark transition-transform duration-300 ease-out lg:relative lg:w-[var(--rail-w)] lg:translate-x-0 lg:transition-none ${open ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'lg:hidden' : ''}`}
       >
         <button
           type="button"
@@ -77,11 +77,12 @@ export default function AppShell({ sidebar, mobileTitle, children }) {
           type="button"
           onClick={close}
           aria-label="Close menu"
-          className="absolute top-4 right-3 grid size-8 place-items-center rounded-lg text-dim hover:bg-hover hover:text-fg lg:hidden"
+          className="absolute top-4 right-3 z-10 grid size-8 place-items-center rounded-lg text-dim hover:bg-hover hover:text-fg lg:hidden"
         >
           <X size={18} />
         </button>
-        {sidebar(close)}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden"><div className="rail-aurora" /></div>
+        <div className="relative flex min-h-0 flex-1 flex-col">{sidebar(close)}</div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -92,20 +93,21 @@ export default function AppShell({ sidebar, mobileTitle, children }) {
             aria-label="Open menu"
             className="grid size-9 place-items-center rounded-lg text-dim hover:bg-hover hover:text-fg"
           >
-            <Menu size={20} />
+            <PanelLeftOpen size={18} />
           </button>
-          {mobileTitle || <Brand />}
+          <div className="truncate text-sm font-medium text-fg">{mobileTitle}</div>
         </header>
-        <main className="relative min-h-0 flex-1">
+
+        <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {collapsed && (
             <button
               type="button"
               onClick={() => setCollapsed(false)}
               aria-label="Show sidebar"
               title="Show sidebar"
-              className="absolute top-2.5 left-3 z-30 hidden size-9 place-items-center rounded-lg border border-line bg-panel text-dim shadow-sm hover:bg-hover hover:text-fg lg:grid"
+              className="absolute top-3.5 left-3 z-20 hidden size-9 place-items-center rounded-xl border border-line bg-panel text-dim shadow-sm transition hover:border-accent hover:text-fg lg:grid"
             >
-              <PanelLeftOpen size={17} />
+              <PanelLeftOpen size={18} />
             </button>
           )}
           {children}

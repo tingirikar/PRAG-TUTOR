@@ -50,20 +50,13 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username.trim(), password: password.trim() })
       })
-      // No backend reachable (e.g. design preview): accept the demo accounts locally
-      let data = await res.json().catch(() => null)
-      if (!data) {
-        const demo = DEMO_USERS[username.trim()]
-        if (!demo || demo.password !== password.trim()) {
-          throw new Error('Could not reach the tutor server. Please make sure the backend is running.')
-        }
-        data = { user: demo.user }
-      } else if (!res.ok) {
-        throw new Error(data.error || 'Failed to sign in. Please verify your credentials.')
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.user) {
+        throw new Error(data?.error || 'Invalid username or password.')
       }
 
       sessionStorage.setItem('user', JSON.stringify(data.user))
-        if (data.token) sessionStorage.setItem('authToken', data.token)
+      if (data.token) sessionStorage.setItem('authToken', data.token)
       if (data.user.role === 'teacher') {
         navigate('/teacher')
       } else {
@@ -82,7 +75,7 @@ export default function Login() {
   return (
     <div className="grid min-h-dvh bg-ink text-fg lg:grid-cols-[1.1fr_1fr]">
       {/* Brand panel */}
-      <aside className="grain dot-grid relative hidden flex-col justify-between overflow-hidden border-r border-line p-12 lg:flex xl:p-16">
+      <aside className="rail-dark dot-grid relative hidden flex-col justify-between overflow-hidden p-12 lg:flex xl:p-16">
         <Brand />
         <div className="max-w-xl">
           <p className="font-mono text-[11px] tracking-[0.25em] text-accent">AI · RAG · MULTI-SUBJECT</p>
@@ -149,7 +142,7 @@ export default function Login() {
             ))}
           </div>
 
-          <form onSubmit={handleLogin} className="mt-5 space-y-4 rounded-2xl border border-line bg-panel/70 p-5 sm:p-6">
+          <form onSubmit={handleLogin} className="animate-rise shadow-[0_30px_70px_-40px_#13172655] mt-5 space-y-4 rounded-2xl border border-line bg-panel/70 p-5 sm:p-6">
             {error && (
               <div className="rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-sm text-danger">{error}</div>
             )}

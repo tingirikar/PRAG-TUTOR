@@ -601,14 +601,14 @@ export default function StudentDashboard() {
             {messages.length > 0 && !loading && sampleQuestions.length > 0 && (
               <div className="pt-2 animate-rise">
                 <div className="mb-2.5 flex items-center justify-between">
-                  <span className="font-mono text-[11px] font-semibold tracking-[0.14em] text-slate-700 uppercase">
+                  <span className="font-mono text-[11px] font-semibold tracking-[0.14em] text-dim uppercase">
                     Explore next:
                   </span>
                   <button
                     type="button"
                     onClick={() => fetchSampleQuestions(selectedSubject.code)}
                     disabled={refreshingQuestions}
-                    className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-slate-600 hover:text-accent disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-dim hover:text-accent disabled:opacity-50"
                   >
                     <RefreshCw size={12} className={refreshingQuestions ? 'animate-spin' : ''} />
                     <span>Refresh</span>
@@ -620,12 +620,12 @@ export default function StudentDashboard() {
                       key={idx}
                       type="button"
                       onClick={() => handleSelectSample(sq)}
-                      className="group flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-xs transition hover:border-accent hover:bg-accent-soft hover:text-accent-strong"
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-panel p-3.5 text-left shadow-xs transition hover:border-accent hover:bg-accent-soft hover:text-accent-strong"
                     >
-                      <span className="text-[13px] font-medium leading-snug text-slate-800 group-hover:text-accent-strong">
+                      <span className="text-[13px] font-medium leading-snug text-fg group-hover:text-accent-strong">
                         {sq.question}
                       </span>
-                      <ArrowUpRight size={14} className="shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-accent" />
+                      <ArrowUpRight size={14} className="shrink-0 text-mute transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-accent" />
                     </button>
                   ))}
                 </div>

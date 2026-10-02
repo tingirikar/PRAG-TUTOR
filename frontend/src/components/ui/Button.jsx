@@ -1,11 +1,11 @@
 const variants = {
   primary:
-    'bg-accent text-white hover:bg-accent-strong shadow-[0_8px_24px_-10px_#5b7cff] disabled:bg-accent/40 disabled:shadow-none disabled:text-white/60',
+    'bg-accent text-white hover:bg-accent-strong shadow-[0_10px_24px_-12px_#3247d6] hover:shadow-[0_14px_30px_-12px_#3247d6] disabled:bg-accent/40 disabled:shadow-none disabled:text-white/60',
   secondary:
-    'bg-raised text-fg border border-line-strong hover:bg-hover hover:border-[#b9c3da] disabled:opacity-50',
+    'bg-panel text-fg border border-line-strong hover:bg-raised hover:border-fg/25 disabled:opacity-50',
   ghost: 'text-dim hover:text-fg hover:bg-hover disabled:opacity-50',
   danger:
-    'text-danger border border-danger/25 bg-danger/5 hover:bg-danger/15 disabled:opacity-50',
+    'text-danger border border-danger/25 bg-danger/5 hover:bg-danger/12 disabled:opacity-50',
 }
 const sizes = {
   sm: 'h-8 px-3 text-[13px] gap-1.5 rounded-lg',
@@ -16,7 +16,7 @@ export default function Button({ variant = 'secondary', size = 'md', className =
   return (
     <button
       type="button"
-      className={`inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-colors ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`press inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all duration-200 ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
       {children}

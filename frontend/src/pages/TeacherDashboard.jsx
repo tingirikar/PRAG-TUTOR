@@ -436,13 +436,20 @@ export default function TeacherDashboard() {
       sidebar={(close) => (
         <>
           <div className="p-4 pt-5"><Brand /></div>
-          <div className="mx-3 mt-3 rounded-xl border border-line bg-panel px-3 py-2.5">
-            <div className="font-mono text-[10px] tracking-[0.16em] text-mute uppercase">Workspace</div>
-            <div className="mt-0.5 text-sm font-medium text-fg">{teacherSubject} Faculty</div>
+          <div className="mx-3 mt-3 animate-rise overflow-hidden rounded-2xl border border-line bg-panel/70 p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] tracking-[0.18em] text-mute uppercase">Workspace</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10.5px] font-medium text-emerald-300">
+                <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" /> Live
+              </span>
+            </div>
+            <div className="mt-2 font-display text-[22px] leading-none text-fg italic">{teacherSubject}</div>
+            <div className="mt-1 text-[12.5px] text-dim">Faculty workspace</div>
           </div>
-          <nav className="flex-1 space-y-1 px-3 pt-5">
-            {navItems.map(([key, label, icon, onClick]) => (
-              <NavItem key={key} active={activeTab === key} icon={icon} label={label} onClick={() => { onClick(); close() }} />
+          <div className="px-5 pt-6 pb-2 font-mono text-[10px] tracking-[0.18em] text-mute uppercase">Manage</div>
+          <nav className="flex-1 space-y-1 px-3">
+            {navItems.map(([key, label, icon, onClick], i) => (
+              <NavItem key={key} index={i} active={activeTab === key} icon={icon} label={label} onClick={() => { onClick(); close() }} />
             ))}
           </nav>
           <UserFooter

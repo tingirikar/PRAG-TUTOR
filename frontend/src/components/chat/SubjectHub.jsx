@@ -29,7 +29,8 @@ export default function SubjectHub({ user, subjects, onSelect }) {
               key={subj.code}
               onClick={() => onSelect(subj)}
               style={{ animationDelay: `${i * 60}ms` }}
-              className="group relative flex animate-rise cursor-pointer flex-col overflow-hidden rounded-2xl border border-line bg-panel p-6 transition-all duration-300 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_30px_60px_-30px_#5b7cff66]"
+              className="group relative flex animate-rise cursor-pointer flex-col overflow-hidden rounded-2xl border border-line bg-panel p-6 transition-all duration-300 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_30px_60px_-30px_#3247d666] sheen press"
+              onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`); e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`) }}
             >
               <div className="pointer-events-none absolute -top-24 -right-24 size-56 rounded-full bg-accent/0 blur-3xl transition group-hover:bg-accent/15" />
               <div className="flex items-start justify-between">

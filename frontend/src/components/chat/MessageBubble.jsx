@@ -5,15 +5,15 @@ import Spinner from '../ui/Spinner'
 
 function Chip({ icon, label, value, tone = 'default' }) {
   const tones = {
-    default: 'border-slate-200 bg-white text-slate-800 shadow-2xs',
-    accent: 'border-blue-200 bg-blue-50/80 text-blue-700 font-semibold shadow-2xs',
-    sky: 'border-sky-200 bg-sky-50/80 text-sky-800 font-semibold shadow-2xs',
-    violet: 'border-violet-200 bg-violet-50/80 text-violet-800 font-semibold shadow-2xs',
+    default: 'border-line bg-panel text-fg shadow-2xs',
+    accent: 'border-accent/30 bg-accent-soft text-accent-strong font-semibold shadow-2xs',
+    sky: 'border-[#3247d6]/20 bg-[#3247d6]/6 text-[#2a3bb0] font-semibold shadow-2xs',
+    violet: 'border-[#6a3fd1]/30 bg-[#6a3fd1]/10 text-[#6a3fd1] font-semibold shadow-2xs',
   }
   return (
     <span className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] ${tones[tone]}`}>
-      <span className="shrink-0 text-slate-500">{icon}</span>
-      {label && <span className="shrink-0 text-slate-500 font-medium">{label}</span>}
+      <span className="shrink-0 text-mute">{icon}</span>
+      {label && <span className="shrink-0 text-mute font-medium">{label}</span>}
       <strong className="truncate font-semibold capitalize">{value}</strong>
     </span>
   )
@@ -30,29 +30,29 @@ function ThoughtTrace({ thinking }) {
   const duration = thinking?.seconds ? `${thinking.seconds}s` : '1.2s'
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-2xs transition">
+    <div className="rounded-xl border border-line bg-panel p-2.5 shadow-2xs transition">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between text-left text-[12.5px] font-medium text-slate-800 transition hover:text-accent"
+        className="flex w-full items-center justify-between text-left text-[12.5px] font-medium text-fg transition hover:text-accent"
       >
         <span className="flex items-center gap-2">
           <span className="flex size-5 items-center justify-center rounded-full bg-accent-soft text-accent">
             <Check size={11} className="stroke-3" />
           </span>
-          <span className="font-semibold text-slate-900">Thinking & Retrieval Pipeline</span>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[10.5px] font-semibold text-slate-600">
+          <span className="font-semibold text-fg">Thinking & Retrieval Pipeline</span>
+          <span className="rounded-full bg-raised px-2 py-0.5 font-mono text-[10.5px] font-semibold text-dim">
             {duration}
           </span>
         </span>
-        <ChevronDown size={14} className={`text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`text-mute transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="mt-2.5 space-y-2 border-t border-slate-100 pt-2.5 pl-1.5 animate-rise">
+        <div className="mt-2.5 space-y-2 border-t border-line pt-2.5 pl-1.5 animate-rise">
           {steps.map((step, idx) => (
-            <div key={idx} className="flex items-center gap-2.5 text-[12.5px] font-medium text-slate-700">
-              <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <div key={idx} className="flex items-center gap-2.5 text-[12.5px] font-medium text-dim">
+              <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-600">
                 <Check size={10} className="stroke-3" />
               </span>
               <span>{step.label}</span>
@@ -68,7 +68,7 @@ export default function MessageBubble({ msg, index, expanded, onToggleSources, o
   if (msg.role === 'user') {
     return (
       <div className="flex animate-rise justify-end">
-        <div className="max-w-[85%] rounded-[20px] rounded-br-md border border-slate-200 bg-white px-4.5 py-3 text-[15px] leading-relaxed whitespace-pre-wrap text-slate-900 shadow-2xs sm:max-w-[75%]">
+        <div className="max-w-[85%] rounded-[20px] rounded-br-md bg-[#0f1430] px-4.5 py-3 text-[15px] leading-relaxed whitespace-pre-wrap text-[#eef1fa] shadow-[0_12px_30px_-18px_#0b0f1e] sm:max-w-[75%]">
           {msg.content}
         </div>
       </div>
@@ -80,7 +80,7 @@ export default function MessageBubble({ msg, index, expanded, onToggleSources, o
 
   return (
     <div className="flex animate-rise gap-3 sm:gap-4">
-      <div className={`grid size-8 shrink-0 place-items-center rounded-full ring-1 ${isError ? 'bg-danger/10 text-danger ring-danger/30' : 'bg-linear-to-br from-accent to-[#2338c9] text-white ring-black/5'}`}>
+      <div className={`grid size-8 shrink-0 place-items-center rounded-full ring-1 ${isError ? 'bg-danger/10 text-danger ring-danger/30' : 'bg-[#0b0f1e] text-[#a5b4ff] ring-[#0b0f1e]/10 shadow-[0_6px_16px_-8px_#0b0f1e]'}`}>
         <Sparkles size={15} />
       </div>
 
@@ -120,7 +120,7 @@ export default function MessageBubble({ msg, index, expanded, onToggleSources, o
                   key={imgIdx}
                   onClick={() => onOpenImage(img)}
                   title="Click to expand"
-                  className="group relative h-40 w-56 shrink-0 snap-start overflow-hidden rounded-xl border border-line bg-white transition hover:border-accent"
+                  className="group relative h-40 w-56 shrink-0 snap-start overflow-hidden rounded-xl border border-line bg-panel transition hover:border-accent"
                 >
                   <img
                     src={`/api${img.url}?u=${encodeURIComponent(username || 'student')}&token=${encodeURIComponent(imageToken || '')}`}
@@ -154,7 +154,7 @@ export default function MessageBubble({ msg, index, expanded, onToggleSources, o
                   type="button"
                   key={`${prerequisite}-${prerequisiteIndex}`}
                   onClick={() => onAsk?.(`Teach me ${prerequisite}`, prerequisite)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-[12px] font-medium text-amber-900 transition hover:border-amber-500 hover:bg-amber-100"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-panel px-2.5 py-1.5 text-[12px] font-medium text-amber-900 transition hover:border-amber-500 hover:bg-amber-100"
                 >
                   {prerequisite}
                   <ArrowUpRight size={12} />
@@ -165,8 +165,8 @@ export default function MessageBubble({ msg, index, expanded, onToggleSources, o
         )}
 
         {msg.exploreNext && msg.exploreNext.length > 0 && !msg.rejected && (
-          <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
-            <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-slate-900">
+          <div className="rounded-xl border border-line bg-panel p-3.5 shadow-2xs">
+            <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-fg">
               <ArrowUpRight size={14} className="text-accent" />
               <span>Explore Next</span>
             </div>
@@ -176,10 +176,10 @@ export default function MessageBubble({ msg, index, expanded, onToggleSources, o
                   type="button"
                   key={`${item.topic || item.question}-${itemIndex}`}
                   onClick={() => onAsk?.(item.question, item.topic)}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-[12.5px] font-medium text-slate-800 transition hover:border-accent hover:bg-accent-soft hover:text-accent-strong"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2.5 text-left text-[12.5px] font-medium text-fg transition hover:border-accent hover:bg-accent-soft hover:text-accent-strong"
                 >
                   <span>{item.question || item.topic}</span>
-                  <ArrowUpRight size={13} className="shrink-0 text-slate-400" />
+                  <ArrowUpRight size={13} className="shrink-0 text-mute" />
                 </button>
               ))}
             </div>
@@ -187,34 +187,34 @@ export default function MessageBubble({ msg, index, expanded, onToggleSources, o
         )}
 
         {msg.sources && msg.sources.length > 0 && (
-          <div className="rounded-xl border border-slate-200 bg-white shadow-2xs">
+          <div className="rounded-xl border border-line bg-panel shadow-2xs">
             <button
               type="button"
               onClick={() => onToggleSources(index)}
-              className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-[13px] font-medium text-slate-800 hover:text-slate-950"
+              className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-[13px] font-medium text-fg hover:text-fg"
             >
               <span className="flex items-center gap-2">
                 <Files size={14} className="text-accent" />
                 <span>{expanded ? 'Hide Verified Sources' : 'Show Verified Sources'}</span>
-                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-slate-700">{msg.sources.length}</span>
+                <span className="rounded-md bg-raised px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-dim">{msg.sources.length}</span>
               </span>
-              <ChevronDown size={15} className={`text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+              <ChevronDown size={15} className={`text-mute transition-transform ${expanded ? 'rotate-180' : ''}`} />
             </button>
 
             {expanded && (
-              <div className="divide-y divide-slate-100 border-t border-slate-100">
+              <div className="divide-y divide-line border-t border-line">
                 {msg.sources.map((src, sIdx) => (
                   <div key={sIdx} className="px-3.5 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-slate-900">
-                        <FileText size={13} className="shrink-0 text-slate-500" />
+                      <span className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-fg">
+                        <FileText size={13} className="shrink-0 text-mute" />
                         <span className="truncate">{src.document}</span>
                       </span>
                       {src.score && (
-                        <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 font-mono text-[10.5px] font-semibold text-blue-700">{src.score}% Match</span>
+                        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[10.5px] font-semibold text-accent-strong">{src.score}% Match</span>
                       )}
                     </div>
-                    <div className="mt-1.5 line-clamp-4 text-[13px] leading-relaxed text-slate-700">"{src.snippet}"</div>
+                    <div className="mt-1.5 line-clamp-4 text-[13px] leading-relaxed text-dim">"{src.snippet}"</div>
                   </div>
                 ))}
               </div>

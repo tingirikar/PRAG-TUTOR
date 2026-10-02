@@ -90,7 +90,7 @@ export default function DocumentsPanel({
             {documents.map((doc) => {
               const isIndexed = String(doc.status).toLowerCase() === 'indexed'
               return (
-                <div key={doc.id} className="rounded-2xl border border-line bg-panel p-4">
+                <div key={doc.id} className="rounded-2xl border border-line bg-panel p-4 lift animate-rise">
                   <div className="flex items-start gap-3">
                     <FileText size={18} className="mt-0.5 shrink-0 text-mute" />
                     <div className="min-w-0 flex-1">
