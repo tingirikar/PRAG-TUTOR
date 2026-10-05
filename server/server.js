@@ -8,10 +8,19 @@ import express from 'express'
 import mongoose from 'mongoose'
 import multer from 'multer'
 
+import {
+  createQuizSet,
+  buildQuiz,
+  getConversationQuizStatus,
+} from './services/quizService.js'
+import QuizSet from './models/QuizSet.js'
+import QuizState from './models/QuizState.js'
+import quizRoutes from './routes/quizRoutes.js'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '..')
 const uploadDir = path.join(projectRoot, 'backend', 'uploads')
-const pythonUrl = process.env.PYTHON_RAG_URL || 'http://127.0.0.1:8000'
+const pythonUrl = process.env.PYTHON_RAG_URL || 'http://127.0.0.1:8001'
 const port = Number(process.env.PORT || 5000)
 
 await fs.mkdir(uploadDir, { recursive: true })
@@ -85,11 +94,24 @@ const messageSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 })
 
+const querySchema = new mongoose.Schema({
+  query_id: { type: String, default: () => randomUUID() },
+  conversation_id: { type: String, required: true },
+  query_number: { type: Number, required: true },
+  query_text: { type: String, required: true },
+  response: { type: String, default: '' },
+  quiz_questions: { type: [mongoose.Schema.Types.Mixed], default: [] },
+  createdAt: { type: Date, default: Date.now }
+})
+
 const conversationSchema = new mongoose.Schema({
   studentUsername: { type: String, required: true, index: true },
   subject: { type: String, required: true, index: true },
   title: { type: String, required: true },
   messages: [messageSchema],
+  query_count: { type: Number, default: 0 },
+  queries: [querySchema],
+  quiz_completed: { type: Boolean, default: false },
 }, { timestamps: true })
 const Conversation = mongoose.models.Conversation || mongoose.model('Conversation', conversationSchema)
 
@@ -191,6 +213,8 @@ app.use((err, _req, res, next) => {
   }
   next(err)
 })
+
+app.use('/api/quiz', quizRoutes)
 
 async function callPython(endpoint, options = {}) {
   const timeout = options.timeout || 120000 // Default 2 minute timeout
@@ -358,7 +382,33 @@ app.get('/api/conversations/:id', async (request, response) => {
     if (mongoReady) {
       const conversation = await Conversation.findById(request.params.id).lean()
       if (!conversation) return response.status(404).json({ error: 'Conversation not found.' })
-      return response.json({ conversation })
+
+      const state = await QuizState.findOne({
+        studentUsername: conversation.studentUsername,
+        subject: conversation.subject,
+      }).lean()
+
+      const quizStatus = await getConversationQuizStatus(
+        conversation.studentUsername,
+        conversation.subject
+      )
+
+      return response.json({
+        conversation: {
+          ...conversation,
+          query_count: conversation.query_count || 0,
+          skip_count: state?.skipCount || 0,
+          quiz_required: quizStatus.quizRequired,
+          quiz_status: {
+            available: quizStatus.quizRequired,
+            compulsory: quizStatus.compulsory,
+            questions: quizStatus.questions,
+            quizSetIds: quizStatus.quizSetIds,
+            total: quizStatus.total,
+            query_count: conversation.query_count || 0,
+          },
+        }
+      })
     }
     return response.status(404).json({ error: 'Conversation not found.' })
   } catch (err) {
@@ -377,12 +427,39 @@ app.post('/api/conversations', async (request, response) => {
         studentUsername,
         subject,
         title,
-        messages: []
+        messages: [],
+        query_count: 0,
+        queries: [],
+        quiz_completed: false,
       })
-      return response.json({ conversation })
+      return response.json({
+        conversation: {
+          _id: conversation._id.toString(),
+          studentUsername: conversation.studentUsername,
+          subject: conversation.subject,
+          title: conversation.title,
+          messages: [],
+          query_count: 0,
+          queries: [],
+          quiz_questions: [],
+          quiz_debt: [],
+          quiz_completed: false,
+        }
+      })
     }
     return response.json({
-      conversation: { _id: randomUUID(), studentUsername, subject, title, messages: [] }
+      conversation: {
+        _id: randomUUID(),
+        studentUsername,
+        subject,
+        title,
+        messages: [],
+        query_count: 0,
+        queries: [],
+        quiz_questions: [],
+        quiz_debt: [],
+        quiz_completed: false,
+      }
     })
   } catch (err) {
     response.status(500).json({ error: err.message })
@@ -400,6 +477,36 @@ app.delete('/api/conversations/:id', async (request, response) => {
     response.status(500).json({ error: err.message })
   }
 })
+
+/**
+ * Determines whether a RAG response constitutes a genuine tutor explanation.
+ * Strictly prevents QuizSet generation on fallbacks, errors, or no-document messages.
+ */
+function isGenuineExplanation(result) {
+  if (!result || typeof result !== 'object') return false
+  if (result.error) return false
+  const text = String(result.response || result.answer || '').trim()
+  if (!text || text.length < 50) return false
+
+  const fallbackIndicators = [
+    'could not complete the tutor response',
+    'no course documents have been uploaded',
+    'no course documents for',
+    'not covered in the available course material',
+    'cannot answer this question based on the course materials',
+    'sorry, but no course documents',
+    'do not have access to',
+    'please upload course documents',
+    'fallback',
+  ]
+
+  const lower = text.toLowerCase()
+  for (const phrase of fallbackIndicators) {
+    if (lower.includes(phrase)) return false
+  }
+
+  return true
+}
 
 app.post('/api/query', async (request, response) => {
   const query = String(request.body?.query || request.body?.question || '').trim()
@@ -430,6 +537,9 @@ app.post('/api/query', async (request, response) => {
     })
 
     // 2. Persist to MongoDB conversation if available
+    let currentQueryNumber = 1
+    const queryId = randomUUID()
+
     if (mongoReady) {
       let conversation = null
       if (conversationId) {
@@ -441,10 +551,15 @@ app.post('/api/query', async (request, response) => {
           studentUsername,
           subject,
           title,
-          messages: []
+          messages: [],
+          query_count: 0,
+          queries: [],
+          quiz_completed: false,
         })
         conversationId = conversation._id.toString()
       }
+
+      currentQueryNumber = (conversation.query_count || 0) + 1
 
       const userMsg = {
         id: randomUUID(),
@@ -467,11 +582,82 @@ app.post('/api/query', async (request, response) => {
       }
 
       conversation.messages.push(userMsg, assistantMsg)
+      conversation.query_count = currentQueryNumber
+
+      // 3. Generate exactly 3 MCQs ONLY for a genuine successful tutor explanation
+      let currentQuizSet = null
+      const explanation = result.response || result.answer || ''
+
+      // RAG Rule: Never create QuizSets for fallback/error responses
+      const isGenuine = isGenuineExplanation(result)
+
+      if (isGenuine) {
+        try {
+          currentQuizSet = await createQuizSet({
+            studentUsername,
+            subject,
+            conversationId,
+            query,
+            explanation,
+          })
+        } catch (quizError) {
+          console.warn('[QUIZ ERROR] Generation failed:', quizError.message)
+        }
+      } else {
+        console.log('[QUIZ SKIPPED] Non-genuine or fallback RAG response — no QuizSet created')
+      }
+
+      // Add conceptual query record to the conversation
+      conversation.queries.push({
+        query_id: queryId,
+        conversation_id: conversationId,
+        query_number: currentQueryNumber,
+        query_text: query,
+        response: explanation,
+        quiz_questions: currentQuizSet ? currentQuizSet.questions : [],
+        createdAt: new Date(),
+      })
+
       conversation.updatedAt = new Date()
       await conversation.save()
+
+      // 4. Authoritative quiz presentation trigger check:
+      let quiz = {
+        available: false,
+        compulsory: false,
+        conversationId,
+        quizSetId: null,
+        quizSetIds: [],
+        questions: [],
+        total: 0,
+        query_count: conversation.query_count,
+      }
+
+      if (isGenuine && currentQuizSet) {
+        const quizStatus = await getConversationQuizStatus(studentUsername, subject, currentQuizSet)
+        quiz = {
+          available: quizStatus.compulsory || Boolean(currentQuizSet),
+          compulsory: quizStatus.compulsory,
+          conversationId,
+          quizSetId: currentQuizSet._id.toString(),
+          quizSetIds: quizStatus.quizSetIds,
+          questions: quizStatus.questions,
+          total: quizStatus.total,
+          query_count: conversation.query_count,
+        }
+      }
+
+      return response.json({
+        ...result,
+        conversationId,
+        query_count: conversation.query_count,
+        query_id: queryId,
+        query_number: currentQueryNumber,
+        quiz,
+      })
     }
 
-    response.json({ ...result, conversationId })
+    return response.json({ ...result, conversationId, query_count: 1, quiz: { available: false, compulsory: false } })
   } catch (error) {
     response.status(error.status || 503).json({ error: error.message })
   }

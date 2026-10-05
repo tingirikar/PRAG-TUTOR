@@ -13,6 +13,9 @@ import {
   ChevronUp, ChevronDown, CircleDot, Circle, Images,
 } from 'lucide-react'
 import './StudentDashboard.css'
+import QuizInvite from '../components/Quiz/QuizInvite.jsx'
+import Quiz from '../components/Quiz/Quiz.jsx'
+import QuizResult from '../components/Quiz/QuizResult.jsx'
 
 // Real vector icon per subject (replaces stored emoji)
 function SubjectIcon({ code, size = 22 }) {
@@ -305,6 +308,12 @@ export default function StudentDashboard() {
   const [thinkingOpen, setThinkingOpen] = useState(false)
   const [thinkingSteps, setThinkingSteps] = useState([])
 
+  // Quiz feature state
+  const [quizMode, setQuizMode] = useState(null) // null | 'invite' | 'active' | 'result'
+  const [activeQuiz, setActiveQuiz] = useState(null) // { quizSetId, quizSetIds, questions, total, compulsory, conversationId }
+  const [quizResult, setQuizResult] = useState(null) // { score, total }
+  const [queryCount, setQueryCount] = useState(0) // tracks queries in the current session (resets per conversation)
+
   const [ollamaOnline, setOllamaOnline] = useState(false)
 
   // Load subjects & available models on mount
@@ -368,6 +377,10 @@ export default function StudentDashboard() {
     setCurrentConversationId(null)
     setMessages([])
     setInput('')
+    setQuizMode(null)
+    setActiveQuiz(null)
+    setQuizResult(null)
+    setQueryCount(0)
     fetchSampleQuestions(subj.code)
     fetchConversations(subj.code)
   }
@@ -378,6 +391,10 @@ export default function StudentDashboard() {
     setCurrentConversationId(null)
     setMessages([])
     setInput('')
+    setQuizMode(null)
+    setActiveQuiz(null)
+    setQuizResult(null)
+    setQueryCount(0)
   }
 
   // Load a saved conversation from MongoDB
@@ -385,12 +402,37 @@ export default function StudentDashboard() {
     if (loading || convId === currentConversationId) return
     try {
       setLoading(true)
+      setQuizMode(null)
+      setActiveQuiz(null)
+      setQuizResult(null)
+      setQueryCount(0)
       const res = await fetch(`/api/conversations/${convId}`)
       const data = await res.json()
       if (data.conversation) {
         setCurrentConversationId(convId)
         setMessages(data.conversation.messages || [])
+        // Restore query count from saved conversation
+        setQueryCount(data.conversation.query_count || 0)
         setExpandedSources({})
+
+        // Check if there is a compulsory/required quiz for this conversation
+        const quizStatus = data.conversation.quiz_status
+        if (quizStatus?.available && quizStatus.questions?.length > 0) {
+          setActiveQuiz({
+            quizSetId: null,
+            quizSetIds: quizStatus.quizSetIds || [],
+            questions: quizStatus.questions,
+            total: quizStatus.total || quizStatus.questions.length,
+            compulsory: true,
+            conversationId: convId,
+          })
+          setQuizMode('active')
+          console.log(`[QUIZ UI DEBUG]\n  conversation_id=${convId}\n  received_questions=${quizStatus.questions.length}\n  quiz_required=true\n  rendering_quiz=true`)
+        } else {
+          setQuizMode(null)
+          setActiveQuiz(null)
+          console.log(`[QUIZ UI DEBUG]\n  conversation_id=${convId}\n  received_questions=0\n  quiz_required=false\n  rendering_quiz=false`)
+        }
       }
     } catch (err) {
       console.error('Failed to load conversation:', err)
@@ -426,13 +468,17 @@ export default function StudentDashboard() {
     setMessages([])
     setExpandedSources({})
     setInput('')
+    setQuizMode(null)
+    setActiveQuiz(null)
+    setQuizResult(null)
+    setQueryCount(0)
   }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  useEffect(scrollToBottom, [messages, loading])
+  useEffect(scrollToBottom, [messages, loading, quizMode])
 
   // Thinking progress simulation
   useEffect(() => {
@@ -476,6 +522,10 @@ export default function StudentDashboard() {
   const handleAsk = async (queryText, chosenLevel = level, topicHint = null) => {
     const query = queryText.trim()
     if (!query || loading || !selectedSubject) return
+
+    setQuizMode(null)
+    setActiveQuiz(null)
+    setQuizResult(null)
 
     const activeModelName = isCustomModel ? (customModelInput.trim() || 'llama3.2:3b') : model
 
@@ -538,10 +588,13 @@ export default function StudentDashboard() {
       const answerText = data.response || data.answer || 'No answer generated.'
       const assistantMessageId = crypto.randomUUID()
 
-      // Track active conversation ID and refresh sidebar list
+      // Track active conversation ID, query count, and refresh sidebar list
       if (data.conversationId) {
         setCurrentConversationId(data.conversationId)
         fetchConversations(selectedSubject.code)
+      }
+      if (typeof data.query_count === 'number') {
+        setQueryCount(data.query_count)
       }
 
       setMessages(prev => [
@@ -562,6 +615,37 @@ export default function StudentDashboard() {
       ])
 
       setLoading(false)
+
+      // Handle quiz generation response:
+      if (data.quiz?.compulsory && data.quiz.questions?.length > 0) {
+        // Compulsory Mode: start quiz immediately, do NOT show YES/NO invitation
+        setActiveQuiz({
+          quizSetId: data.quiz.quizSetId,
+          quizSetIds: data.quiz.quizSetIds || [],
+          questions: data.quiz.questions,
+          total: data.quiz.total || data.quiz.questions.length,
+          compulsory: true,
+          conversationId: data.conversationId || currentConversationId,
+        })
+        setQuizMode('active')
+        console.log(`[QUIZ UI DEBUG] Compulsory quiz started immediately: questions=${data.quiz.questions.length}`)
+      } else if (data.quiz?.available && data.quiz.quizSetId) {
+        // Normal Mode: show "Do you want to attempt a quiz?" YES / NO
+        setActiveQuiz({
+          quizSetId: data.quiz.quizSetId,
+          quizSetIds: data.quiz.quizSetIds || [],
+          questions: [],
+          total: data.quiz.total || 3,
+          compulsory: false,
+          conversationId: data.conversationId || currentConversationId,
+        })
+        setQuizMode('invite')
+        console.log(`[QUIZ UI DEBUG] Quiz invitation displayed: total=${data.quiz.total || 3}`)
+      } else {
+        setQuizMode(null)
+        setActiveQuiz(null)
+        console.log(`[QUIZ UI DEBUG] No quiz required or available`)
+      }
 
       if (imageMode === 'notes') {
         fetch('/api/query/images', {
@@ -1091,6 +1175,58 @@ export default function StudentDashboard() {
               </div>
             )}
 
+            {/* Quiz UI Flow */}
+            {quizMode === 'invite' && activeQuiz && (
+              <QuizInvite
+                quizSetId={activeQuiz.quizSetId}
+                conversationId={activeQuiz.conversationId || currentConversationId}
+                studentUsername={currentUser.username || 'student'}
+                subject={selectedSubject.code}
+                total={activeQuiz.total || 3}
+                onYes={(quizData) => {
+                  setActiveQuiz(prev => ({ ...prev, ...quizData }))
+                  setQuizMode('active')
+                }}
+                onNo={() => {
+                  setQuizMode(null)
+                  setActiveQuiz(null)
+                }}
+              />
+            )}
+
+            {quizMode === 'active' && activeQuiz && (
+              <Quiz
+                questions={activeQuiz.questions}
+                quizSetIds={activeQuiz.quizSetIds}
+                conversationId={activeQuiz.conversationId || currentConversationId}
+                studentUsername={currentUser.username || 'student'}
+                subject={selectedSubject.code}
+                compulsory={activeQuiz.compulsory}
+                onComplete={(score, total) => {
+                  setQuizResult({ score, total })
+                  setQuizMode('result')
+                  if (selectedSubject?.code) {
+                    fetchConversations(selectedSubject.code)
+                  }
+                }}
+              />
+            )}
+
+            {quizMode === 'result' && quizResult && (
+              <QuizResult
+                score={quizResult.score}
+                total={quizResult.total}
+                onBack={() => {
+                  setQuizMode(null)
+                  setActiveQuiz(null)
+                  setQuizResult(null)
+                  if (selectedSubject?.code) {
+                    fetchConversations(selectedSubject.code)
+                  }
+                }}
+              />
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -1115,6 +1251,21 @@ export default function StudentDashboard() {
 
           {/* Chat Input Bar */}
           <div className="chat-input-area">
+            {/* 3-Query Session Progress Indicator */}
+            {queryCount > 0 && queryCount < 3 && quizMode === null && (
+              <div className="session-progress-bar" title={`Query ${queryCount} of 3 in this learning session`}>
+                <span className="session-progress-label">
+                  Session: {queryCount}/3 queries
+                  {queryCount === 1 ? ' — 2 more for your quiz' : ' — 1 more for your quiz'}
+                </span>
+                <div className="session-progress-track">
+                  <div
+                    className="session-progress-fill"
+                    style={{ width: `${(queryCount / 3) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
             <form className="composer" onSubmit={sendMessage}>
               {/* Controls live in a compact toolbar above the prompt */}
               <div className="composer-toolbar">
