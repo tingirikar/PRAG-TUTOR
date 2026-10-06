@@ -1,7 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, Files, LogOut, UploadCloud, FileText, Check, X, Inbox, GitFork, Search, RefreshCw } from 'lucide-react'
-import './TeacherDashboard.css'
+import { Upload, Files, GitFork } from 'lucide-react'
+import AppShell from '../components/layout/AppShell'
+import NavItem from '../components/layout/NavItem'
+import UserFooter from '../components/layout/UserFooter'
+import Brand from '../components/ui/Brand'
+import UploadPanel from '../components/teacher/UploadPanel'
+import DocumentsPanel from '../components/teacher/DocumentsPanel'
+import PrerequisitesPanel from '../components/teacher/PrerequisitesPanel'
+import TopicCard from '../components/teacher/TopicCard'
+import AddTopicModal from '../components/teacher/AddTopicModal'
+import { apiFetch } from '../api'
 
 const sanitizeFileName = (fileName) => {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -12,7 +21,7 @@ export default function TeacherDashboard() {
   const fileInputRef = useRef(null)
 
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(sessionStorage.getItem('user') || '{}'))
-  const teacherSubject = currentUser.subject || (currentUser.username === 'teacher_ml' ? 'ML' : 'DSA')
+  const teacherSubject = (currentUser.subject || (currentUser.username?.startsWith('teacher_') ? currentUser.username.replace('teacher_', '').toUpperCase() : 'DSA')).toUpperCase()
 
   // Auth guard
   useEffect(() => {
@@ -32,6 +41,149 @@ export default function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState('upload')
   const [dragOver, setDragOver] = useState(false)
   const [deletingDocName, setDeletingDocName] = useState(null)
+
+  // Prerequisite CRUD State
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newTopicName, setNewTopicName] = useState('')
+  const [newTopicPrereqs, setNewTopicPrereqs] = useState([])
+  const [newPrereqInput, setNewPrereqInput] = useState('')
+  const [isSubmittingTopic, setIsSubmittingTopic] = useState(false)
+
+  // Card Editing State
+  const [editingTopic, setEditingTopic] = useState(null)
+  const [editPrereqsList, setEditPrereqsList] = useState([])
+  const [editNewChipInput, setEditNewChipInput] = useState('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [isDeletingTopic, setIsDeletingTopic] = useState(false)
+
+  const handleAddTopic = async (e) => {
+    if (e) e.preventDefault()
+    const trimmed = newTopicName.trim()
+    if (!trimmed) {
+      alert('Please enter a topic name.')
+      return
+    }
+    setIsSubmittingTopic(true)
+    try {
+      const res = await apiFetch('/api/prerequisites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: teacherSubject,
+          topic: trimmed,
+          prerequisites: newTopicPrereqs,
+          createdBy: currentUser.username || 'teacher'
+        })
+      })
+      if (res.ok) {
+        setNewTopicName('')
+        setNewTopicPrereqs([])
+        setNewPrereqInput('')
+        setShowAddModal(false)
+        await fetchPrerequisites()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || 'Failed to add topic')
+      }
+    } catch (err) {
+      console.error('Add topic error:', err)
+      alert('Error adding topic')
+    } finally {
+      setIsSubmittingTopic(false)
+    }
+  }
+
+  const handleAddChipToNewTopic = () => {
+    const trimmed = newPrereqInput.trim()
+    if (trimmed && !newTopicPrereqs.includes(trimmed)) {
+      setNewTopicPrereqs(prev => [...prev, trimmed])
+      setNewPrereqInput('')
+    }
+  }
+
+  const handleRemoveChipFromNewTopic = (index) => {
+    setNewTopicPrereqs(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleStartEdit = (topic, currentPrereqs) => {
+    setEditingTopic(topic)
+    setEditPrereqsList([...(currentPrereqs || [])])
+    setEditNewChipInput('')
+  }
+
+  const handleCancelEdit = () => {
+    setEditingTopic(null)
+    setEditPrereqsList([])
+    setEditNewChipInput('')
+  }
+
+  const handleRemoveChipFromEdit = (index) => {
+    setEditPrereqsList(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleAddChipToEdit = () => {
+    const trimmed = editNewChipInput.trim()
+    if (trimmed && !editPrereqsList.includes(trimmed)) {
+      setEditPrereqsList(prev => [...prev, trimmed])
+      setEditNewChipInput('')
+    }
+  }
+
+  const handleSaveEdit = async (topic) => {
+    setIsSavingEdit(true)
+    try {
+      const res = await apiFetch('/api/prerequisites', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: teacherSubject,
+          topic,
+          prerequisites: editPrereqsList
+        })
+      })
+      if (res.ok) {
+        setEditingTopic(null)
+        await fetchPrerequisites()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || 'Failed to update prerequisites')
+      }
+    } catch (err) {
+      console.error('Update prerequisites error:', err)
+      alert('Error updating prerequisites')
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
+  const handleDeleteTopic = async (topic) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${topic}" from the ${teacherSubject} syllabus?`)) {
+      return
+    }
+    setIsDeletingTopic(true)
+    try {
+      const res = await apiFetch('/api/prerequisites', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: teacherSubject,
+          topic
+        })
+      })
+      if (res.ok) {
+        if (editingTopic === topic) setEditingTopic(null)
+        await fetchPrerequisites()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || 'Failed to delete topic')
+      }
+    } catch (err) {
+      console.error('Delete topic error:', err)
+      alert('Error deleting topic')
+    } finally {
+      setIsDeletingTopic(false)
+    }
+  }
 
   const handleFiles = (fileList) => {
     const pdfs = Array.from(fileList).filter(f => f.type === 'application/pdf')
@@ -78,7 +230,7 @@ export default function TeacherDashboard() {
 
   const fetchDocuments = async () => {
     try {
-      const res = await fetch(`/api/documents?subject=${encodeURIComponent(teacherSubject)}`)
+      const res = await apiFetch(`/api/documents?subject=${encodeURIComponent(teacherSubject)}`)
       if (res.ok) {
         const data = await res.json()
         setDocuments(data.documents || [])
@@ -91,7 +243,7 @@ export default function TeacherDashboard() {
   const fetchPrerequisites = async () => {
     setLoadingPrereqs(true)
     try {
-      const res = await fetch(`/api/prerequisites?subject=${encodeURIComponent(teacherSubject)}`)
+      const res = await apiFetch(`/api/prerequisites?subject=${encodeURIComponent(teacherSubject)}`)
       if (res.ok) {
         const data = await res.json()
         setPrerequisites(data.prerequisites || {})
@@ -105,7 +257,7 @@ export default function TeacherDashboard() {
 
   const executeDeleteDocument = async (name) => {
     try {
-      const res = await fetch('/api/documents/delete', {
+      const res = await apiFetch('/api/documents/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: sanitizeFileName(name), subject: teacherSubject }),
@@ -134,8 +286,8 @@ export default function TeacherDashboard() {
     return new Promise((resolve) => {
       const xhr = new XMLHttpRequest()
       const formData = new FormData()
-      formData.append('file', fileObj.file)
       formData.append('subject', teacherSubject)
+      formData.append('file', fileObj.file)
 
       setFiles(prev => prev.map(x => x.id === fileObj.id ? {
         ...x,
@@ -160,6 +312,7 @@ export default function TeacherDashboard() {
 
       // 2. Stream real AI pipeline progress from Express SSE response (20% - 100%)
       let seenIndex = 0
+      let streamError = ''
       xhr.onprogress = () => {
         const fullText = xhr.responseText
         const chunk = fullText.slice(seenIndex)
@@ -175,6 +328,7 @@ export default function TeacherDashboard() {
             try {
               const data = JSON.parse(trimmed.slice(6))
               if (data.error) {
+                streamError = data.error
                 setFiles(prev => prev.map(x => x.id === fileObj.id ? {
                   ...x,
                   status: 'error',
@@ -199,7 +353,7 @@ export default function TeacherDashboard() {
       }
 
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
+        if (xhr.status >= 200 && xhr.status < 300 && !streamError) {
           setFiles(prev => prev.map(x => x.id === fileObj.id ? {
             ...x,
             status: 'done',
@@ -210,7 +364,7 @@ export default function TeacherDashboard() {
           fetchPrerequisites()
           resolve(true)
         } else {
-          let errorMsg = `Server error (${xhr.status})`
+          let errorMsg = streamError || `Server error (${xhr.status})`
           try {
             const errObj = JSON.parse(xhr.responseText)
             if (errObj.error) errorMsg = errObj.error
@@ -235,6 +389,8 @@ export default function TeacherDashboard() {
 
       xhr.open('POST', `/api/upload?stream=true&subject=${encodeURIComponent(teacherSubject)}`, true)
       xhr.setRequestHeader('Accept', 'text/event-stream')
+      const authToken = sessionStorage.getItem('authToken')
+      if (authToken) xhr.setRequestHeader('Authorization', `Bearer ${authToken}`)
       xhr.send(formData)
     })
   }
@@ -260,407 +416,127 @@ export default function TeacherDashboard() {
 
   const logout = () => {
     sessionStorage.removeItem('user')
+    sessionStorage.removeItem('authToken')
     navigate('/')
   }
 
+  const goPrereqs = () => {
+    setActiveTab('prerequisites')
+    fetchPrerequisites()
+  }
+
+  const navItems = [
+    ['upload', 'Upload', <Upload size={17} />, () => setActiveTab('upload')],
+    ['documents', 'Documents', <Files size={17} />, () => setActiveTab('documents')],
+    ['prerequisites', 'Prerequisites', <GitFork size={17} />, goPrereqs],
+  ]
+
   return (
-    <div className="dashboard">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-            <div className="brand-icon">PT</div>
-          <span>PRAG Tutor</span>
-        </div>
-
-        <nav className="sidebar-nav">
-          <button
-            className={`nav-item ${activeTab === 'upload' ? 'active' : ''}`}
-            onClick={() => setActiveTab('upload')}
-          >
-            <span className="nav-icon"><Upload size={18} /></span>
-            <span>Upload</span>
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'documents' ? 'active' : ''}`}
-            onClick={() => setActiveTab('documents')}
-          >
-            <span className="nav-icon"><Files size={18} /></span>
-            <span>Documents</span>
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'prerequisites' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('prerequisites')
-              fetchPrerequisites()
-            }}
-          >
-            <span className="nav-icon"><GitFork size={18} /></span>
-            <span>Prerequisites</span>
-          </button>
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="user-info">
-            <div className="user-avatar">{currentUser.name?.charAt(0) || 'T'}</div>
-            <div>
-              <div className="user-name">{currentUser.name || 'Teacher'}</div>
-              <div className="user-role">{teacherSubject} Faculty</div>
+    <AppShell
+      sidebar={(close) => (
+        <>
+          <div className="p-4 pt-5"><Brand /></div>
+          <div className="mx-3 mt-3 animate-rise overflow-hidden rounded-2xl border border-line bg-panel/70 p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] tracking-[0.18em] text-mute uppercase">Workspace</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10.5px] font-medium text-emerald-300">
+                <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" /> Live
+              </span>
             </div>
+            <div className="mt-2 font-display text-[22px] leading-none text-fg italic">{teacherSubject}</div>
+            <div className="mt-1 text-[12.5px] text-dim">Faculty workspace</div>
           </div>
-          <button className="nav-item" onClick={logout}>
-            <span className="nav-icon"><LogOut size={17} /></span>
-            <span>Logout</span>
-          </button>
-        </div>
-      </aside>
+          <div className="px-5 pt-6 pb-2 font-mono text-[10px] tracking-[0.18em] text-mute uppercase">Manage</div>
+          <nav className="flex-1 space-y-1 px-3">
+            {navItems.map(([key, label, icon, onClick], i) => (
+              <NavItem key={key} index={i} active={activeTab === key} icon={icon} label={label} onClick={() => { onClick(); close() }} />
+            ))}
+          </nav>
+          <UserFooter
+            initial={currentUser.name?.charAt(0) || 'T'}
+            name={currentUser.name || 'Teacher'}
+            role={`${teacherSubject} Faculty`}
+            logoutLabel="Logout"
+            onLogout={logout}
+          />
+        </>
+      )}
+    >
+      <div className="grain h-full overflow-y-auto scroll-thin">
+        <div className="mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:py-12">
+          {activeTab === 'upload' && (
+            <UploadPanel
+              subject={teacherSubject}
+              files={files}
+              dragOver={dragOver}
+              setDragOver={setDragOver}
+              fileInputRef={fileInputRef}
+              handleFiles={handleFiles}
+              removeFile={removeFile}
+              uploadAll={uploadAll}
+              clearDone={clearDone}
+              formatSize={formatSize}
+            />
+          )}
 
-      {/* Main */}
-      <main className="main-content">
+          {activeTab === 'documents' && (
+            <DocumentsPanel
+              subject={teacherSubject}
+              documents={documents}
+              formatSize={formatSize}
+              deletingDocName={deletingDocName}
+              setDeletingDocName={setDeletingDocName}
+              onDelete={executeDeleteDocument}
+            />
+          )}
 
-        {/* Upload Panel */}
-        {activeTab === 'upload' && (
-          <div>
-            <div className="page-header">
-              <h2>Upload Documents &bull; <span style={{ color: 'var(--accent)' }}>{teacherSubject}</span></h2>
-              <p>Upload PDF files to create embeddings for student RAG in {teacherSubject}</p>
-            </div>
-
-            <div
-              className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDragOver(false)
-                handleFiles(e.dataTransfer.files)
-              }}
-            >
-              <div className="upload-icon"><UploadCloud size={30} /></div>
-              <h3>Drop {teacherSubject} PDF files here or click to browse</h3>
-              <p>Only .pdf files are accepted</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                multiple
-                style={{ display: 'none' }}
-                onChange={(e) => handleFiles(e.target.files)}
-              />
-            </div>
-
-            {files.length > 0 && (
-              <>
-                <div className="file-list">
-                  {files.map((f) => (
-                    <div key={f.id} className="file-item">
-                      <span className="file-icon"><FileText size={20} /></span>
-                      <div className="file-details">
-                        <div className="file-name-row">
-                          <span className="file-name" title={f.name}>{f.name}</span>
-                          <span className="file-size">{formatSize(f.size)}</span>
-                        </div>
-
-                        {f.status !== 'pending' && (
-                          <>
-                            <div className="file-progress-track">
-                              <div
-                                className={`file-progress-fill ${f.status}`}
-                                style={{ width: `${f.progress !== undefined ? f.progress : (f.status === 'done' ? 100 : 0)}%` }}
-                              />
-                            </div>
-                            <div className="file-stage-row">
-                              <span className="file-stage-text">
-                                {f.status === 'uploading' && <span className="progress-spinner" />}
-                                {f.stage || (f.status === 'done' ? 'Completed & Indexed' : 'Processing...')}
-                              </span>
-                              <span className="file-percent-text">
-                                {f.progress !== undefined ? f.progress : (f.status === 'done' ? 100 : 0)}%
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="file-actions-right">
-                        <span className={`file-status ${f.status}`}>
-                          {f.status === 'pending' && 'Ready'}
-                          {f.status === 'uploading' && `${f.progress || 0}%`}
-                          {f.status === 'done' && <><Check size={13} /> Indexed</>}
-                          {f.status === 'error' && 'Error'}
-                        </span>
-                        {(f.status === 'pending' || f.status === 'error' || f.status === 'done') && (
-                          <button
-                            className="file-remove"
-                            onClick={(e) => { e.stopPropagation(); removeFile(f.id) }}
-                            title="Remove file"
-                          >
-                            <X size={15} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="upload-actions">
-                  <button
-                    className="btn-accent"
-                    onClick={uploadAll}
-                    disabled={files.some(f => f.status === 'uploading') || files.filter(f => f.status === 'pending').length === 0}
-                    style={{
-                      opacity: (files.some(f => f.status === 'uploading') || files.filter(f => f.status === 'pending').length === 0) ? 0.6 : 1,
-                      cursor: (files.some(f => f.status === 'uploading') || files.filter(f => f.status === 'pending').length === 0) ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    {files.some(f => f.status === 'uploading')
-                      ? 'Indexing in progress...'
-                      : `Upload All to ${teacherSubject} (${files.filter(f => f.status === 'pending').length})`
-                    }
-                  </button>
-                  {files.some(f => f.status === 'done') && !files.some(f => f.status === 'uploading') && (
-                    <button className="btn-secondary" onClick={clearDone}>Clear Done</button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Documents Panel */}
-        {activeTab === 'documents' && (
-          <div>
-            <div className="page-header">
-              <h2>{teacherSubject} Course Documents</h2>
-              <p>All uploaded and indexed documents for {teacherSubject}</p>
-            </div>
-
-            {documents.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon"><Inbox size={30} /></div>
-                <p>No documents uploaded for {teacherSubject} yet.<br />Go to Upload to add PDF files.</p>
-              </div>
-            ) : (
-              <div className="doc-table-card">
-                <table className="doc-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Size</th>
-                      <th>Uploaded</th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {documents.map((doc) => (
-                      <tr key={doc.id}>
-                        <td>{doc.name}</td>
-                        <td>{formatSize(doc.size)}</td>
-                        <td>{doc.uploadedAt}</td>
-                        <td><span className="badge badge-green">{doc.status}</span></td>
-                        <td>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                            <button
-                              type="button"
-                              className="btn-secondary"
-                              style={{ padding: '4px 10px', fontSize: '0.8rem', borderRadius: '6px' }}
-                              onClick={() => {
-                                setActiveTab('prerequisites')
-                                fetchPrerequisites()
-                              }}
-                            >
-                              Syllabus
-                            </button>
-                            {deletingDocName === doc.name ? (
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                <span style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 600 }}>Delete?</span>
-                                <button
-                                  type="button"
-                                  onClick={() => executeDeleteDocument(doc.name)}
-                                  title="Confirm Delete"
-                                  style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
-                                >
-                                  <Check size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setDeletingDocName(null)}
-                                  title="Cancel"
-                                  style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
-                                >
-                                  <X size={14} />
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                className="btn-table-delete"
-                                onClick={() => setDeletingDocName(doc.name)}
-                                title="Delete document and remove from index"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Prerequisites & Syllabus Graph Panel */}
-        {activeTab === 'prerequisites' && (
-          <div>
-            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-              <div>
-                <h2>{teacherSubject} Syllabus & Prerequisites</h2>
-                <p>AI-extracted learning concepts and required prerequisite dependencies for {teacherSubject}</p>
-              </div>
-              <button
-                className="btn-secondary"
-                onClick={fetchPrerequisites}
-                disabled={loadingPrereqs}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '0.85rem' }}
-              >
-                <RefreshCw size={14} className={loadingPrereqs ? 'spin' : ''} />
-                Refresh Graph
-              </button>
-            </div>
-
-            {/* Metrics Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-              <div style={{ padding: '16px 20px', background: 'var(--surface-1, #fff)', border: '1px solid var(--border, #e2e8f0)', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim, #64748b)', fontWeight: 600, textTransform: 'uppercase' }}>Total Topics</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent, #2547ff)', marginTop: '4px' }}>
-                  {Object.keys(prerequisites).length}
-                </div>
-              </div>
-              <div style={{ padding: '16px 20px', background: 'var(--surface-1, #fff)', border: '1px solid var(--border, #e2e8f0)', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim, #64748b)', fontWeight: 600, textTransform: 'uppercase' }}>Foundational (Entry Level)</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>
-                  {Object.values(prerequisites).filter(p => !p || p.length === 0).length}
-                </div>
-              </div>
-              <div style={{ padding: '16px 20px', background: 'var(--surface-1, #fff)', border: '1px solid var(--border, #e2e8f0)', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim, #64748b)', fontWeight: 600, textTransform: 'uppercase' }}>Intermediate & Advanced</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#6366f1', marginTop: '4px' }}>
-                  {Object.values(prerequisites).filter(p => p && p.length > 0).length}
-                </div>
-              </div>
-            </div>
-
-            {/* Search Filter */}
-            {Object.keys(prerequisites).length > 0 && (
-              <div style={{ position: 'relative', marginBottom: '20px' }}>
-                <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim, #64748b)' }} />
-                <input
-                  type="text"
-                  placeholder={`Search ${teacherSubject} topics...`}
-                  value={prereqSearch}
-                  onChange={(e) => setPrereqSearch(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px 10px 38px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border, #e2e8f0)',
-                    background: 'var(--surface-1, #fff)',
-                    color: 'var(--text, #0f172a)',
-                    fontSize: '0.9rem',
-                    outline: 'none'
-                  }}
+          {activeTab === 'prerequisites' && (
+            <PrerequisitesPanel
+              subject={teacherSubject}
+              prerequisites={prerequisites}
+              loading={loadingPrereqs}
+              search={prereqSearch}
+              setSearch={setPrereqSearch}
+              onAdd={() => setShowAddModal(true)}
+              onRefresh={fetchPrerequisites}
+              renderCard={(topic, prereqs) => (
+                <TopicCard
+                  key={topic}
+                  topic={topic}
+                  prereqs={prereqs}
+                  isEditing={editingTopic === topic}
+                  editPrereqsList={editPrereqsList}
+                  editNewChipInput={editNewChipInput}
+                  setEditNewChipInput={setEditNewChipInput}
+                  onStartEdit={() => handleStartEdit(topic, prereqs)}
+                  onCancelEdit={handleCancelEdit}
+                  onSave={() => handleSaveEdit(topic)}
+                  onDelete={() => handleDeleteTopic(topic)}
+                  onAddChip={handleAddChipToEdit}
+                  onRemoveChip={handleRemoveChipFromEdit}
+                  isSavingEdit={isSavingEdit}
                 />
-              </div>
-            )}
+              )}
+            />
+          )}
+        </div>
+      </div>
 
-            {Object.keys(prerequisites).length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon"><GitFork size={30} /></div>
-                <p>No prerequisites generated for {teacherSubject} yet.<br />Upload course notes or syllabus PDF in the <strong>Upload</strong> tab to automatically build the concept graph.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-                {Object.entries(prerequisites)
-                  .filter(([topic]) => !prereqSearch || topic.toLowerCase().includes(prereqSearch.toLowerCase()))
-                  .map(([topic, prereqs]) => {
-                    const isFoundational = !prereqs || prereqs.length === 0
-                    return (
-                      <div
-                        key={topic}
-                        style={{
-                          padding: '18px',
-                          background: 'var(--surface-1, #fff)',
-                          border: '1px solid var(--border, #e2e8f0)',
-                          borderRadius: '12px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                          gap: '12px',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-                        }}
-                      >
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-                            <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--text, #0f172a)' }}>{topic}</h4>
-                            <span
-                              style={{
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                padding: '3px 8px',
-                                borderRadius: '999px',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.5px',
-                                background: isFoundational ? 'rgba(16, 185, 129, 0.12)' : 'rgba(99, 102, 241, 0.12)',
-                                color: isFoundational ? '#10b981' : '#6366f1',
-                                flexShrink: 0
-                              }}
-                            >
-                              {isFoundational ? 'Foundational' : `${prereqs.length} Prereq${prereqs.length > 1 ? 's' : ''}`}
-                            </span>
-                          </div>
-
-                          <div style={{ marginTop: '12px' }}>
-                            <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-dim, #64748b)', marginBottom: '6px', textTransform: 'uppercase' }}>
-                              Required Prerequisites:
-                            </div>
-                            {isFoundational ? (
-                              <span style={{ fontSize: '0.82rem', color: 'var(--text-dim, #64748b)', fontStyle: 'italic' }}>
-                                None — entry-level core concept
-                              </span>
-                            ) : (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                {prereqs.map((p, idx) => (
-                                  <span
-                                    key={idx}
-                                    style={{
-                                      fontSize: '0.78rem',
-                                      padding: '4px 9px',
-                                      borderRadius: '6px',
-                                      background: 'var(--surface-2, rgba(37, 71, 255, 0.08))',
-                                      color: 'var(--text, #0f172a)',
-                                      fontWeight: 500,
-                                      border: '1px solid var(--border, #e2e8f0)'
-                                    }}
-                                  >
-                                    ↳ {p}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            )}
-          </div>
-        )}
-
-      </main>
-    </div>
+      {showAddModal && (
+        <AddTopicModal
+          subject={teacherSubject}
+          onClose={() => setShowAddModal(false)}
+          onSubmit={handleAddTopic}
+          newTopicName={newTopicName}
+          setNewTopicName={setNewTopicName}
+          newPrereqInput={newPrereqInput}
+          setNewPrereqInput={setNewPrereqInput}
+          newTopicPrereqs={newTopicPrereqs}
+          onAddChip={handleAddChipToNewTopic}
+          onRemoveChip={handleRemoveChipFromNewTopic}
+          isSubmitting={isSubmittingTopic}
+        />
+      )}
+    </AppShell>
   )
 }

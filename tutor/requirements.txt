@@ -1,0 +1,11 @@
+pymongo
+requests
+python-dotenv
+fastapi
+uvicorn[standard]
+sentence-transformers
+pdfplumber
+PyMuPDF
+pinecone
+groq
+Pillow

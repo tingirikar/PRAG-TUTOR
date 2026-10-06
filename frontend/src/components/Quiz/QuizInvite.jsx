@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { Sparkles, ArrowRight, Loader2 } from 'lucide-react'
+import { Sparkles, ArrowRight, Loader2, HelpCircle } from 'lucide-react'
+import { apiFetch } from '../../api'
 
 export default function QuizInvite({
   quizSetId,
   conversationId = null,
   studentUsername,
   subject,
-  total = 9,
+  total = 3,
   onYes,
   onNo,
 }) {
@@ -17,7 +18,7 @@ export default function QuizInvite({
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/quiz/decision', {
+      const res = await apiFetch('/api/quiz/decision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -52,36 +53,40 @@ export default function QuizInvite({
   }
 
   return (
-    <div className="quiz-invite-card">
-      <div className="quiz-card-header">
-        <span className="badge-chip badge-topic">
-          <Sparkles size={14} className="badge-icon" />
-          <span className="badge-label">Concept Check ({total} Questions)</span>
+    <div className="quiz-invite-card w-full max-w-2xl rounded-2xl border border-line bg-panel p-6 shadow-xs animate-rise">
+      <div className="quiz-card-header flex items-center justify-between gap-3 mb-4">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent-soft px-3 py-1 text-xs font-semibold text-accent-strong">
+          <Sparkles size={13} className="text-accent" />
+          <span>Concept Check ({total} Questions)</span>
         </span>
       </div>
 
-      <div className="quiz-invite-content">
-        <h3 className="quiz-title">Do you want to attempt a quiz?</h3>
-        <p className="quiz-desc">
+      <div className="quiz-invite-content space-y-2 mb-5">
+        <h3 className="text-base font-semibold text-fg tracking-tight">
+          Do you want to attempt a quiz?
+        </h3>
+        <p className="text-sm leading-relaxed text-dim">
           Test your understanding of the concepts covered in this explanation with a quick {total}-question assessment based strictly on this lesson.
         </p>
       </div>
 
       {error && (
-        <div className="quiz-error-msg">{error}</div>
+        <div className="quiz-error-msg mb-4 rounded-xl border border-danger/20 bg-danger/10 px-3.5 py-2 text-xs text-danger">
+          {error}
+        </div>
       )}
 
-      <div className="quiz-actions-row">
+      <div className="quiz-actions-row flex items-center gap-3">
         <button
           type="button"
-          className="quiz-btn-primary"
+          className="quiz-btn-primary inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-xs transition hover:bg-accent-strong disabled:opacity-50"
           onClick={() => handleDecision('yes')}
           disabled={loading}
           id="quiz-invite-yes-btn"
         >
           {loading ? (
             <>
-              <Loader2 size={15} className="thinking-spinner" />
+              <Loader2 size={15} className="animate-spin" />
               <span>Starting Quiz...</span>
             </>
           ) : (
@@ -94,7 +99,7 @@ export default function QuizInvite({
 
         <button
           type="button"
-          className="quiz-btn-secondary"
+          className="quiz-btn-secondary inline-flex items-center gap-2 rounded-xl border border-line bg-raised px-4 py-2 text-sm font-medium text-dim transition hover:bg-hover hover:text-fg disabled:opacity-50"
           onClick={() => handleDecision('no')}
           disabled={loading}
           id="quiz-invite-no-btn"

@@ -1,247 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
-import 'katex/dist/katex.min.css'
-import mermaid from 'mermaid'
-import {
-  LayoutGrid, LogOut, GraduationCap, User, ArrowRight, ArrowLeft, Zap, Database,
-  Cpu, Globe, SquarePen, Check, X, MessageSquare, Trash2, BookOpen, RefreshCw,
-  FolderOpen, Link2, Target, FileText, Files, Network, Brain, Binary,
-  ChevronUp, ChevronDown, CircleDot, Circle, Images,
-} from 'lucide-react'
-import './StudentDashboard.css'
-import QuizInvite from '../components/Quiz/QuizInvite.jsx'
-import Quiz from '../components/Quiz/Quiz.jsx'
-import QuizResult from '../components/Quiz/QuizResult.jsx'
-
-// Real vector icon per subject (replaces stored emoji)
-function SubjectIcon({ code, size = 22 }) {
-  if (code === 'ML') return <Brain size={size} strokeWidth={1.75} />
-  if (code === 'DSA') return <Binary size={size} strokeWidth={1.75} />
-  return <BookOpen size={size} strokeWidth={1.75} />
-}
-
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'dark',
-  securityLevel: 'loose',
-  themeVariables: {
-    darkMode: true,
-    background: '#131b2e',
-    primaryColor: '#2563eb',
-    primaryTextColor: '#f8fafc',
-    primaryBorderColor: '#3b82f6',
-    lineColor: '#60a5fa',
-    secondaryColor: '#1e293b',
-    tertiaryColor: '#0f172a'
-  }
-})
-
-function MermaidBlock({ code }) {
-  const [svg, setSvg] = useState('')
-  const [error, setError] = useState(false)
-  const idRef = useRef(`mermaid-${Math.random().toString(36).substring(2, 9)}`)
-
-  useEffect(() => {
-    let isMounted = true
-    const cleanCode = (code || '').trim()
-    if (!cleanCode) return
-
-    mermaid.render(idRef.current, cleanCode)
-      .then(({ svg }) => {
-        if (isMounted) {
-          setSvg(svg)
-          setError(false)
-        }
-      })
-      .catch((err) => {
-        console.warn('Mermaid render error:', err)
-        if (isMounted) {
-          setError(true)
-        }
-      })
-
-    return () => {
-      isMounted = false
-      const el = document.getElementById(idRef.current)
-      if (el) el.remove()
-    }
-  }, [code])
-
-  if (error) {
-    return (
-      <div className="mermaid-fallback-box">
-        <div className="mermaid-header">
-          <span className="mermaid-badge"><Network size={14} /> Mermaid Diagram (Syntax Preview)</span>
-        </div>
-        <pre className="mermaid-code-pre"><code>{code}</code></pre>
-      </div>
-    )
-  }
-
-  if (!svg) {
-    return (
-      <div className="mermaid-loading-box">
-        <span className="image-loading-spinner" aria-hidden="true"></span>
-        <span>Rendering interactive diagram...</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="mermaid-container-card">
-      <div className="mermaid-header">
-        <span className="mermaid-badge"><Network size={14} /> Interactive Mermaid Diagram</span>
-      </div>
-      <div
-        className="mermaid-rendered-svg"
-        dangerouslySetInnerHTML={{ __html: svg }}
-      />
-    </div>
-  )
-}
-
-function preprocessLaTeX(content) {
-  if (!content) return ''
-  // Convert display math \[ ... \] to $$ ... $$
-  let processed = content.replace(/\\\[([\s\S]*?)\\\]/g, (_match, eq) => `$$\n${eq.trim()}\n$$`)
-  // Convert inline math \( ... \) to $ ... $
-  processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (_match, eq) => `$${eq.trim()}$`)
-  return processed
-}
-
-function formatContent(content) {
-  if (!content) return null
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
-      components={{
-        code({ node, inline, className, children, ...props }) {
-          const codeText = String(children || '').replace(/\n$/, '')
-          const match = /language-(\w+)/.exec(className || '')
-          const isMermaid = (match && match[1] === 'mermaid') || (!inline && /^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph)\b/.test(codeText))
-          if (!inline && isMermaid) {
-            return <MermaidBlock code={codeText} />
-          }
-          return (
-            <code className={className} {...props}>
-              {children}
-            </code>
-          )
-        }
-      }}
-    >
-      {preprocessLaTeX(content)}
-    </ReactMarkdown>
-  )
-}
-
-function DropupSelect({
-  value,
-  label,
-  onChange,
-  disabled = false,
-  ariaLabel,
-  options = [],
-  align = 'left',
-  minWidth = 160,
-}) {
-  const [open, setOpen] = useState(false)
-  const containerRef = useRef(null)
-
-  useEffect(() => {
-    if (!open) return
-    const handleClickOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setOpen(false)
-      }
-    }
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [open])
-
-  const handleSelect = (val) => {
-    onChange(val)
-    setOpen(false)
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      className={`dropup-container ${open ? 'open' : ''}`}
-    >
-      <button
-        type="button"
-        className={`dropup-trigger ${open ? 'active' : ''}`}
-        onClick={() => !disabled && setOpen((prev) => !prev)}
-        disabled={disabled}
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-      >
-        <span className="dropup-trigger-label">{label}</span>
-        <ChevronUp size={13} className={`dropup-arrow ${open ? 'rotate' : ''}`} />
-      </button>
-
-      {open && (
-        <div
-          className={`dropup-menu dropup-align-${align}`}
-          role="listbox"
-          style={{ minWidth }}
-        >
-          {options.map((item, idx) => {
-            if (item.group) {
-              return (
-                <div key={`group-${idx}`} className="dropup-group">
-                  <div className="dropup-group-title">{item.group}</div>
-                  {item.items.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      role="option"
-                      aria-selected={value === opt.value}
-                      disabled={opt.disabled}
-                      className={`dropup-item ${value === opt.value ? 'selected' : ''} ${opt.disabled ? 'disabled' : ''}`}
-                      onClick={() => !opt.disabled && handleSelect(opt.value)}
-                    >
-                      <span className="dropup-item-text">{opt.label}</span>
-                      {value === opt.value && <Check size={14} className="dropup-check" />}
-                    </button>
-                  ))}
-                </div>
-              )
-            }
-            return (
-              <button
-                key={item.value}
-                type="button"
-                role="option"
-                aria-selected={value === item.value}
-                disabled={item.disabled}
-                className={`dropup-item ${value === item.value ? 'selected' : ''} ${item.disabled ? 'disabled' : ''}`}
-                onClick={() => !item.disabled && handleSelect(item.value)}
-              >
-                <span className="dropup-item-text">{item.label}</span>
-                {value === item.value && <Check size={14} className="dropup-check" />}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
+import AppShell from '../components/layout/AppShell'
+import NavItem from '../components/layout/NavItem'
+import UserFooter from '../components/layout/UserFooter'
+import Brand from '../components/ui/Brand'
+import SubjectIcon from '../components/ui/SubjectIcon'
+import SubjectHub from '../components/chat/SubjectHub'
+import ChatSidebar from '../components/chat/ChatSidebar'
+import ChatWelcome from '../components/chat/ChatWelcome'
+import MessageBubble from '../components/chat/MessageBubble'
+import ThinkingPanel from '../components/chat/ThinkingPanel'
+import Composer from '../components/chat/Composer'
+import Lightbox from '../components/chat/Lightbox'
+import Quiz from '../components/Quiz/Quiz'
+import QuizInvite from '../components/Quiz/QuizInvite'
+import QuizResult from '../components/Quiz/QuizResult'
+import { apiFetch } from '../api'
+import { ArrowUpRight, LayoutGrid, RefreshCw } from 'lucide-react'
 
 export default function StudentDashboard() {
   const navigate = useNavigate()
@@ -274,6 +49,13 @@ export default function StudentDashboard() {
       description: 'Explore supervised & unsupervised learning, cost functions, gradient descent, neural networks, and evaluation.',
       teacherUsername: 'teacher_ml',
       teacherName: 'Prof. Alan (ML Faculty)'
+    },
+    {
+      code: 'CN',
+      name: 'Computer Networks',
+      description: 'OSI & TCP/IP stack, routing protocols, flow control, congestion avoidance, sockets, and network security.',
+      teacherUsername: 'teacher_cn',
+      teacherName: 'Dr. Kevin (CN Faculty)'
     }
   ])
   const [selectedSubject, setSelectedSubject] = useState(null)
@@ -291,7 +73,7 @@ export default function StudentDashboard() {
   const [sampleQuestions, setSampleQuestions] = useState([])
   const [refreshingQuestions, setRefreshingQuestions] = useState(false)
   const [expandedSources, setExpandedSources] = useState({})
-  const [imageMode, setImageMode] = useState('notes')
+  const [imageMode, setImageMode] = useState('none')
   const [model, setModel] = useState('openai/gpt-oss-20b')
   const [provider, setProvider] = useState('groq')
   const [cloudModels, setCloudModels] = useState([
@@ -308,17 +90,17 @@ export default function StudentDashboard() {
   const [thinkingOpen, setThinkingOpen] = useState(false)
   const [thinkingSteps, setThinkingSteps] = useState([])
 
-  // Quiz feature state
+  // Quiz flow state
   const [quizMode, setQuizMode] = useState(null) // null | 'invite' | 'active' | 'result'
-  const [activeQuiz, setActiveQuiz] = useState(null) // { quizSetId, quizSetIds, questions, total, compulsory, conversationId }
-  const [quizResult, setQuizResult] = useState(null) // { score, total }
-  const [queryCount, setQueryCount] = useState(0) // tracks queries in the current session (resets per conversation)
+  const [activeQuiz, setActiveQuiz] = useState(null)
+  const [quizResult, setQuizResult] = useState(null)
+  const [queryCount, setQueryCount] = useState(0)
 
   const [ollamaOnline, setOllamaOnline] = useState(false)
 
   // Load subjects & available models on mount
   useEffect(() => {
-    fetch('/api/subjects')
+    apiFetch('/api/subjects')
       .then(res => res.json())
       .then(data => {
         if (data.subjects && data.subjects.length > 0) {
@@ -327,7 +109,7 @@ export default function StudentDashboard() {
       })
       .catch(err => console.warn('Could not load subjects from API:', err))
 
-    fetch('/api/models')
+    apiFetch('/api/models')
       .then(res => res.json())
       .then(data => {
         if (data.cloud_models && data.cloud_models.length > 0) setCloudModels(data.cloud_models)
@@ -342,7 +124,7 @@ export default function StudentDashboard() {
     setRefreshingQuestions(true)
     try {
       const seed = Math.random().toString(36).substring(2, 10)
-      const res = await fetch(`/api/sample-questions?seed=${seed}&subject=${subjectCode || 'DSA'}`)
+      const res = await apiFetch(`/api/sample-questions?seed=${seed}&subject=${subjectCode || 'DSA'}`)
       if (!res.ok) throw new Error('Could not refresh questions')
       const data = await res.json()
       if (data.questions && Array.isArray(data.questions) && data.questions.length > 0) {
@@ -361,7 +143,7 @@ export default function StudentDashboard() {
   const fetchConversations = async (subjectCode) => {
     const studentUser = JSON.parse(sessionStorage.getItem('user') || '{}')
     try {
-      const res = await fetch(`/api/conversations?studentUsername=${encodeURIComponent(studentUser.username || 'student')}&subject=${encodeURIComponent(subjectCode)}`)
+      const res = await apiFetch(`/api/conversations?studentUsername=${encodeURIComponent(studentUser.username || 'student')}&subject=${encodeURIComponent(subjectCode)}`)
       const data = await res.json()
       if (data.conversations) {
         setConversations(data.conversations)
@@ -377,6 +159,7 @@ export default function StudentDashboard() {
     setCurrentConversationId(null)
     setMessages([])
     setInput('')
+    setImageMode('none')
     setQuizMode(null)
     setActiveQuiz(null)
     setQuizResult(null)
@@ -406,7 +189,7 @@ export default function StudentDashboard() {
       setActiveQuiz(null)
       setQuizResult(null)
       setQueryCount(0)
-      const res = await fetch(`/api/conversations/${convId}`)
+      const res = await apiFetch(`/api/conversations/${convId}?studentUsername=${encodeURIComponent(currentUser.username || 'student')}`)
       const data = await res.json()
       if (data.conversation) {
         setCurrentConversationId(convId)
@@ -414,8 +197,8 @@ export default function StudentDashboard() {
         // Restore query count from saved conversation
         setQueryCount(data.conversation.query_count || 0)
         setExpandedSources({})
+        setQueryCount(data.conversation.query_count || 0)
 
-        // Check if there is a compulsory/required quiz for this conversation
         const quizStatus = data.conversation.quiz_status
         if (quizStatus?.available && quizStatus.questions?.length > 0) {
           setActiveQuiz({
@@ -427,11 +210,6 @@ export default function StudentDashboard() {
             conversationId: convId,
           })
           setQuizMode('active')
-          console.log(`[QUIZ UI DEBUG]\n  conversation_id=${convId}\n  received_questions=${quizStatus.questions.length}\n  quiz_required=true\n  rendering_quiz=true`)
-        } else {
-          setQuizMode(null)
-          setActiveQuiz(null)
-          console.log(`[QUIZ UI DEBUG]\n  conversation_id=${convId}\n  received_questions=0\n  quiz_required=false\n  rendering_quiz=false`)
         }
       }
     } catch (err) {
@@ -445,7 +223,7 @@ export default function StudentDashboard() {
   const confirmDelete = async (convId, e) => {
     e.stopPropagation()
     try {
-      await fetch(`/api/conversations/${convId}`, { method: 'DELETE' })
+      await apiFetch(`/api/conversations/${convId}?studentUsername=${encodeURIComponent(currentUser.username || 'student')}`, { method: 'DELETE' })
       setConversations(prev => prev.filter(c => c._id !== convId))
       setDeletingConvId(null)
       if (currentConversationId === convId) {
@@ -468,6 +246,7 @@ export default function StudentDashboard() {
     setMessages([])
     setExpandedSources({})
     setInput('')
+    setImageMode('none')
     setQuizMode(null)
     setActiveQuiz(null)
     setQuizResult(null)
@@ -559,10 +338,11 @@ export default function StudentDashboard() {
       status: 'pending'
     })
     setThinkingSteps(steps)
+    const thinkingStart = Date.now()
     setLoading(true)
 
     try {
-      const res = await fetch('/api/query', {
+      const res = await apiFetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -605,20 +385,27 @@ export default function StudentDashboard() {
           content: answerText,
           topic: data.topic || null,
           prerequisites: data.prerequisites || [],
+          exploreNext: data.explore_next || [],
+          rejected: Boolean(data.rejected),
+          status: data.status || null,
           sources: data.sources || [],
           images: data.images || [],
-          imagesLoading: imageMode === 'notes',
+          imagesLoading: !data.rejected && imageMode === 'notes',
           level: chosenLevel,
           model: data.model || activeModelName,
           provider: data.provider || provider,
+          thinking: { steps: steps.map(st => ({ label: st.label, status: 'done' })), seconds: Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) },
         },
       ])
 
       setLoading(false)
 
+      if (typeof data.query_count === 'number') {
+        setQueryCount(data.query_count)
+      }
+
       // Handle quiz generation response:
       if (data.quiz?.compulsory && data.quiz.questions?.length > 0) {
-        // Compulsory Mode: start quiz immediately, do NOT show YES/NO invitation
         setActiveQuiz({
           quizSetId: data.quiz.quizSetId,
           quizSetIds: data.quiz.quizSetIds || [],
@@ -628,9 +415,7 @@ export default function StudentDashboard() {
           conversationId: data.conversationId || currentConversationId,
         })
         setQuizMode('active')
-        console.log(`[QUIZ UI DEBUG] Compulsory quiz started immediately: questions=${data.quiz.questions.length}`)
       } else if (data.quiz?.available && data.quiz.quizSetId) {
-        // Normal Mode: show "Do you want to attempt a quiz?" YES / NO
         setActiveQuiz({
           quizSetId: data.quiz.quizSetId,
           quizSetIds: data.quiz.quizSetIds || [],
@@ -640,18 +425,24 @@ export default function StudentDashboard() {
           conversationId: data.conversationId || currentConversationId,
         })
         setQuizMode('invite')
-        console.log(`[QUIZ UI DEBUG] Quiz invitation displayed: total=${data.quiz.total || 3}`)
       } else {
         setQuizMode(null)
         setActiveQuiz(null)
-        console.log(`[QUIZ UI DEBUG] No quiz required or available`)
       }
 
-      if (imageMode === 'notes') {
-        fetch('/api/query/images', {
+      if (imageMode === 'notes' && !data.rejected) {
+        apiFetch('/api/query/images', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, topic: data.topic || '', mode: 'notes', subject: selectedSubject.code }),
+          body: JSON.stringify({
+            query,
+            topic: data.topic || '',
+            mode: 'notes',
+            subject: selectedSubject.code,
+            conversationId: data.conversationId || currentConversationId,
+            messageId: assistantMessageId,
+            studentUsername: currentUser.username || 'student',
+          }),
         })
           .then(async imageRes => {
             const imageData = await imageRes.json()
@@ -691,18 +482,37 @@ export default function StudentDashboard() {
     }
   }
 
+  const pendingSample = useRef(null)
+
   const sendMessage = (e) => {
     e.preventDefault()
-    handleAsk(input, level)
+    const hint = pendingSample.current && pendingSample.current.question === input.trim() ? pendingSample.current.topic : null
+    pendingSample.current = null
+    handleAsk(input, level, hint)
   }
 
   const handleSelectSample = (sample) => {
+    pendingSample.current = sample
     if (sample.level) setLevel(sample.level)
-    handleAsk(sample.question, sample.level || level, sample.topic)
+    setInput(sample.question)
+    requestAnimationFrame(() => {
+      const el = document.getElementById('chat-composer')
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) }
+    })
+  }
+
+  const handleSelectPrerequisite = (question, topic) => {
+    pendingSample.current = { question, topic }
+    setInput(question)
+    requestAnimationFrame(() => {
+      const el = document.getElementById('chat-composer')
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) }
+    })
   }
 
   const logout = () => {
     sessionStorage.removeItem('user')
+    sessionStorage.removeItem('authToken')
     navigate('/')
   }
 
@@ -711,95 +521,26 @@ export default function StudentDashboard() {
   // ==========================================
   if (!selectedSubject) {
     return (
-      <div className="dashboard subject-hub-dashboard">
-        <aside className="sidebar">
-          <div className="sidebar-brand">
-            <div className="brand-icon">PT</div>
-            <span>PRAG Tutor</span>
-          </div>
-
-          <nav className="sidebar-nav">
-            <div className="sidebar-section-title">Navigation</div>
-            <button className="nav-item active">
-              <span className="nav-icon"><LayoutGrid size={18} /></span>
-              <span>Subject Hub</span>
-            </button>
-          </nav>
-
-          <div className="sidebar-footer">
-            <div className="user-info">
-              <div className="user-avatar">{currentUser.name?.charAt(0) || 'S'}</div>
-              <div>
-                <div className="user-name">{currentUser.name || 'Student'}</div>
-                <div className="user-role">Student</div>
-              </div>
-            </div>
-            <button className="btn-logout" onClick={logout}>
-              <span className="nav-icon"><LogOut size={17} /></span>
-              <span>Sign Out</span>
-            </button>
-          </div>
-        </aside>
-
-        <main className="main-content hub-content">
-          <div className="hub-container">
-            <div className="hub-header">
-              <div className="hub-welcome-badge"><GraduationCap size={15} /> Student Dashboard</div>
-              <h1>Welcome back, {currentUser.name || 'Student'}</h1>
-              <p>Select your course subject below to start personalized AI tutoring grounded in your syllabus.</p>
-            </div>
-
-            <div className="subjects-grid">
-              {subjects.map(subj => (
-                <div
-                  key={subj.code}
-                  className="subject-card"
-                  onClick={() => selectSubject(subj)}
-                >
-                  <div className="subject-card-top">
-                    <span className="subject-card-icon"><SubjectIcon code={subj.code} size={24} /></span>
-                    <span className="subject-code-badge">{subj.code}</span>
-                  </div>
-                  <h3>{subj.name}</h3>
-                  <p className="subject-card-desc">{subj.description}</p>
-                  <div className="subject-card-meta">
-                    <span className="subject-teacher-info">
-                      <User size={14} /> Faculty: <strong>{subj.teacherName || subj.teacherUsername}</strong>
-                    </span>
-                  </div>
-                  <button className="btn-enter-subject">
-                    Launch {subj.code} Tutor <ArrowRight size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="hub-features-row">
-              <div className="hub-feature-item">
-                <span className="hub-feature-icon"><Zap size={20} /></span>
-                <div>
-                  <strong>Retrieval Augmented Generation</strong>
-                  <p>Fact-checked against verified course texts without hallucinating.</p>
-                </div>
-              </div>
-              <div className="hub-feature-item">
-                <span className="hub-feature-icon"><Database size={20} /></span>
-                <div>
-                  <strong>Persistent Saved Chats</strong>
-                  <p>Every session is stored in MongoDB so you can resume anytime.</p>
-                </div>
-              </div>
-              <div className="hub-feature-item">
-                <span className="hub-feature-icon"><Cpu size={20} /></span>
-                <div>
-                  <strong>Local & Cloud Models</strong>
-                  <p>Choose ultra-fast Groq cloud LLMs or offline local Ollama models.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
+      <AppShell
+        sidebar={(close) => (
+          <>
+            <div className="p-4 pt-5"><Brand /></div>
+            <nav className="flex-1 space-y-1 px-3 pt-4">
+              <div className="px-3 pb-2 font-mono text-[10.5px] tracking-[0.16em] text-mute uppercase">Navigation</div>
+              <NavItem active icon={<LayoutGrid size={17} />} label="Subject Hub" onClick={close} />
+            </nav>
+            <UserFooter
+              initial={currentUser.name?.charAt(0) || 'S'}
+              name={currentUser.name || 'Student'}
+              role="Student"
+              logoutLabel="Sign Out"
+              onLogout={logout}
+            />
+          </>
+        )}
+      >
+        <SubjectHub user={currentUser} subjects={subjects} onSelect={selectSubject} />
+      </AppShell>
     )
   }
 
@@ -865,314 +606,116 @@ export default function StudentDashboard() {
   // VIEW 2: TUTOR CHAT WORKSPACE (SCOPED TO SUBJECT)
   // ==========================================
   return (
-    <div className="dashboard">
-      {/* ChatGPT / Claude-Style Left Sidebar with Saved Chats */}
-      <aside className="sidebar chat-sidebar">
-        <div className="sidebar-top">
-          <button className="btn-back-hub" onClick={backToSubjects}>
-            <ArrowLeft size={16} />
-            <span>All Subjects</span>
-          </button>
-
-          <div className="current-subject-header">
-            <span className="subject-icon-small"><SubjectIcon code={selectedSubject.code} size={18} /></span>
-            <div className="subject-header-text">
-              <strong>{selectedSubject.code}</strong>
-              <small>{selectedSubject.name}</small>
-            </div>
+    <AppShell
+      mobileTitle={
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-accent"><SubjectIcon code={selectedSubject.code} size={16} /></span>
+          <span className="truncate text-sm font-medium">{selectedSubject.name}</span>
+        </div>
+      }
+      sidebar={(close) => (
+        <ChatSidebar
+          close={close}
+          subject={selectedSubject}
+          conversations={conversations}
+          currentConversationId={currentConversationId}
+          deletingConvId={deletingConvId}
+          onBack={backToSubjects}
+          onNewChat={startNewChat}
+          onLoad={loadConversation}
+          onAskDelete={setDeletingConvId}
+          onConfirmDelete={confirmDelete}
+          onCancelDelete={cancelDelete}
+          user={currentUser}
+          onLogout={logout}
+        />
+      )}
+    >
+      <div className="flex h-full flex-col">
+        {/* Desktop header */}
+        <div className="hidden h-14 shrink-0 items-center justify-between border-b border-line px-6 lg:flex in-[.rail-collapsed]:pl-16">
+          <div className="flex min-w-0 items-center gap-2.5 text-sm">
+            <span className="text-accent"><SubjectIcon code={selectedSubject.code} size={16} /></span>
+            <span className="font-medium text-fg">{selectedSubject.name}</span>
+            <span className="text-mute">/</span>
+            <span className="truncate text-dim">
+              {conversations.find(c => c._id === currentConversationId)?.title || 'New Chat'}
+            </span>
           </div>
-
-          <button className="btn-new-chat-chatgpt" onClick={startNewChat}>
-            <span className="btn-icon"><SquarePen size={16} /></span>
-            <span>New Chat</span>
-          </button>
+          <span className="font-mono text-[11px] text-mute">{selectedSubject.teacherName || selectedSubject.teacherUsername}</span>
         </div>
 
-        {/* Saved Chat History List from MongoDB */}
-        <div className="sidebar-chat-history">
-          <div className="history-label">Saved Conversations</div>
-          {conversations.length === 0 ? (
-            <div className="no-history-hint">No saved chats in {selectedSubject.code} yet. Start asking a question!</div>
-          ) : (
-            <div className="chat-history-list">
-              {conversations.map(conv => (
-                <div
-                  key={conv._id}
-                  className={`chat-history-item ${currentConversationId === conv._id ? 'active' : ''} ${deletingConvId === conv._id ? 'confirming-delete' : ''}`}
-                  onClick={() => {
-                    if (deletingConvId === conv._id) return
-                    loadConversation(conv._id)
-                  }}
-                >
-                  {deletingConvId === conv._id ? (
-                    <div className="inline-delete-confirm" onClick={(e) => e.stopPropagation()}>
-                      <span className="inline-delete-text">Delete?</span>
-                      <div className="inline-delete-actions">
-                        <button
-                          type="button"
-                          className="btn-inline-confirm"
-                          onClick={(e) => confirmDelete(conv._id, e)}
-                          title="Confirm Delete"
-                        >
-                          <Check size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-inline-cancel"
-                          onClick={cancelDelete}
-                          title="Cancel"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="chat-item-icon"><MessageSquare size={15} /></span>
-                      <span className="chat-item-title" title={conv.title}>{conv.title}</span>
-                      <button
-                        type="button"
-                        className="btn-delete-chat"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeletingConvId(conv._id)
-                        }}
-                        title="Delete Chat"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="sidebar-footer">
-          <div className="user-info">
-            <div className="user-avatar">{currentUser.name?.charAt(0) || 'S'}</div>
-            <div>
-              <div className="user-name">{currentUser.name || 'Student'}</div>
-              <div className="user-role">Student</div>
-            </div>
-          </div>
-          <button className="btn-logout" onClick={logout}>
-            <span className="nav-icon"><LogOut size={17} /></span>
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Chat Workspace */}
-      <main className="main-content">
-        <div className="chat-container">
-
-          {/* Messages Feed */}
-          <div className="chat-messages">
+        {/* Messages Feed */}
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-none">
+          <div className="mx-auto w-full max-w-5xl xl:max-w-6xl space-y-6 px-4 py-6 sm:px-8">
             {messages.length === 0 && !loading && (
-              <div className="welcome-message">
-                <div className="welcome-icon"><BookOpen size={30} /></div>
-                <h3>Welcome to {selectedSubject.name} Tutor</h3>
-                <p>
-                  Ask any question related to {selectedSubject.code} course materials.
-                  I'll explain concepts at your chosen level.
-                </p>
-
-                {refreshingQuestions || sampleQuestions.length > 0 ? (
-                  <div className="sample-questions-container">
-                    <div className="sample-questions-heading">
-                      <span className="sample-questions-title">
-                        Sample Questions from Course Materials
-                      </span>
-                      <button
-                        type="button"
-                        className="refresh-questions"
-                        onClick={() => fetchSampleQuestions(selectedSubject.code)}
-                        disabled={refreshingQuestions}
-                      >
-                        {refreshingQuestions ? 'Refreshing...' : <><RefreshCw size={13} /> Refresh Questions</>}
-                      </button>
-                    </div>
-
-                    <div className="sample-questions-grid">
-                      {refreshingQuestions
-                        ? Array.from({ length: 6 }).map((_, idx) => (
-                            <div key={`skel-${idx}`} className="sample-question-card skeleton-card">
-                              <div className="sample-card-header">
-                                <span className="skeleton-pill" />
-                                <span className="skeleton-pill skeleton-pill-sm" />
-                              </div>
-                              <div className="skeleton-line skeleton-line-long" />
-                              <div className="skeleton-line skeleton-line-short" />
-                            </div>
-                          ))
-                        : sampleQuestions.map((sq, idx) => (
-                            <div
-                              key={idx}
-                              className="sample-question-card"
-                              onClick={() => handleSelectSample(sq)}
-                            >
-                              <div className="sample-card-header">
-                                <span className="sample-topic-pill">{sq.topic}</span>
-                                <span className="sample-level-pill">{sq.level}</span>
-                              </div>
-                              <div className="sample-card-question">{sq.question}</div>
-                            </div>
-                          ))
-                      }
-                    </div>
-                  </div>
-                ) : (
-                  <div className="no-sources-empty-state">
-                    <div className="no-sources-icon"><FolderOpen size={28} /></div>
-                    <h4>No Course Materials Added Yet</h4>
-                    <p>
-                      No source files or syllabus documents have been uploaded for <strong>{selectedSubject.name}</strong> yet.
-                      Questions and grounded tutoring will appear once faculty adds course files.
-                    </p>
-                  </div>
-                )}
-              </div>
+              <ChatWelcome
+                subject={selectedSubject}
+                refreshing={refreshingQuestions}
+                questions={sampleQuestions}
+                onRefresh={() => fetchSampleQuestions(selectedSubject.code)}
+                onSelect={handleSelectSample}
+              />
             )}
 
             {messages.map((msg, i) => (
-              <div key={i} className={`chat-bubble ${msg.role}`}>
-                {msg.role === 'assistant' && (
-                  <>
-                    <div className="msg-badges">
-                      {msg.topic && (
-                        <span className="badge-chip badge-topic">
-                          <span className="badge-icon"><BookOpen size={13} /></span>
-                          <span className="badge-label">Topic:</span>
-                          <strong>{msg.topic}</strong>
-                        </span>
-                      )}
-                      {msg.prerequisites && msg.prerequisites.length > 0 && (
-                        <span className="badge-chip badge-prereq">
-                          <span className="badge-icon"><Link2 size={13} /></span>
-                          <span className="badge-label">Prerequisites:</span>
-                          <strong>{msg.prerequisites.join(', ')}</strong>
-                        </span>
-                      )}
-                      {msg.level && (
-                        <span className="badge-chip badge-level">
-                          <span className="badge-icon"><Target size={13} /></span>
-                          <strong>{msg.level}</strong>
-                        </span>
-                      )}
-                      {msg.model && (
-                        <span className={`badge-chip ${msg.provider === 'local' ? 'badge-local' : 'badge-cloud'}`}>
-                          <span className="badge-icon">{msg.provider === 'local' ? <Cpu size={13} /> : <Globe size={13} />}</span>
-                          <span className="badge-label">{msg.provider === 'local' ? 'Local Ollama:' : 'Cloud Groq:'}</span>
-                          <strong>{msg.model}</strong>
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Diagrams in chat */}
-                    {msg.imagesLoading && (
-                      <div className="image-loading-status">
-                        <span className="image-loading-spinner" aria-hidden="true"></span>
-                        <span>Loading relevant diagrams...</span>
-                      </div>
-                    )}
-                    {msg.images && msg.images.length > 0 && (
-                      <div className="image-gallery-section">
-                        <div className="image-gallery-label">
-                          <span><Images size={15} /> Relevant Diagrams ({msg.images.length})</span>
-                        </div>
-                        <div className="image-gallery">
-                          {msg.images.map((img, imgIdx) => (
-                            <div
-                              key={imgIdx}
-                              className="image-gallery-item"
-                              onClick={() => setLightboxImage(img)}
-                              title="Click to expand"
-                            >
-                              <img
-                                src={`/api${img.url}?u=${encodeURIComponent(currentUser.username || 'student')}`}
-                                alt={img.source === 'document' ? `Diagram from ${img.document}, page ${img.page + 1}` : 'Diagram'}
-                                loading="lazy"
-                              />
-                              <div className="image-source-badge document">
-                                <span><FileText size={12} /> {img.document} (p. {img.page + 1})</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Assistant or User Content */}
-                <div className={msg.role === 'assistant' ? 'assistant-text-content' : ''}>
-                  {msg.role === 'assistant' ? formatContent(msg.content) : msg.content}
-                </div>
-
-                {/* Verified Course Citations Accordion */}
-                {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
-                  <div className="sources-wrapper">
-                    <button
-                      type="button"
-                      className={`sources-toggle-btn ${expandedSources[i] ? 'active' : ''}`}
-                      onClick={() => toggleSources(i)}
-                    >
-                      <span className="sources-toggle-left">
-                        <span className="sources-toggle-icon"><Files size={15} /></span>
-                        <span>{expandedSources[i] ? 'Hide Verified Sources' : 'Show Verified Sources'}</span>
-                      </span>
-                      <span className="sources-toggle-arrow">{expandedSources[i] ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</span>
-                    </button>
-
-                    {expandedSources[i] && (
-                      <div className="sources-list">
-                        {msg.sources.map((src, sIdx) => (
-                          <div key={sIdx} className="source-item">
-                            <div className="source-item-header">
-                              <span className="source-doc-name">{src.document}</span>
-                              {src.score && (
-                                <span className="source-score-badge">{src.score}% Match</span>
-                              )}
-                            </div>
-                            <div className="source-snippet">"{src.snippet}"</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <MessageBubble
+                key={i}
+                msg={msg}
+                index={i}
+                expanded={!!expandedSources[i]}
+                onToggleSources={toggleSources}
+                onOpenImage={setLightboxImage}
+                onAsk={handleSelectPrerequisite}
+                username={currentUser.username}
+              />
             ))}
 
-            {loading && (
-              <div className="thinking-accordion">
-                <button
-                  type="button"
-                  className="thinking-header-btn"
-                  onClick={() => setThinkingOpen(prev => !prev)}
-                >
-                  <span className="thinking-spinner"></span>
-                  <span className="thinking-title">Thinking & Retrieval Pipeline</span>
-                  <span className="thinking-arrow">{thinkingOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</span>
-                </button>
-
-                {thinkingOpen && (
-                  <div className="thinking-body">
-                    <div className="thinking-steps">
-                      {thinkingSteps.map((step, idx) => (
-                        <div key={idx} className={`thinking-step ${step.status}`}>
-                          <span className="step-icon">
-                            {step.status === 'done' ? <Check size={14} /> : step.status === 'active' ? <CircleDot size={14} /> : <Circle size={14} />}
-                          </span>
-                          <span className="step-label">{step.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+            {/* Explore Next inside scrollable message stream:
+                - Sticks to the end of the chat
+                - Scrolls down out of view when scrolling up to read chat history
+                - Clicking populates input; sending hides it until answer finishes
+            */}
+            {messages.length > 0 && !loading && sampleQuestions.length > 0 && (
+              <div className="pt-2 animate-rise">
+                <div className="mb-2.5 flex items-center justify-between">
+                  <span className="font-mono text-[11px] font-semibold tracking-[0.14em] text-dim uppercase">
+                    Explore next:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fetchSampleQuestions(selectedSubject.code)}
+                    disabled={refreshingQuestions}
+                    className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-dim hover:text-accent disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={refreshingQuestions ? 'animate-spin' : ''} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {sampleQuestions.slice(0, 4).map((sq, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSelectSample(sq)}
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-panel p-3.5 text-left shadow-xs transition hover:border-accent hover:bg-accent-soft hover:text-accent-strong"
+                    >
+                      <span className="text-[13px] font-medium leading-snug text-fg group-hover:text-accent-strong">
+                        {sq.question}
+                      </span>
+                      <ArrowUpRight size={14} className="shrink-0 text-mute transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-accent" />
+                    </button>
+                  ))}
+                </div>
               </div>
+            )}
+
+            {loading && (
+              <ThinkingPanel
+                open={thinkingOpen}
+                onToggle={() => setThinkingOpen(prev => !prev)}
+                steps={thinkingSteps}
+              />
             )}
 
             {/* Quiz UI Flow */}
@@ -1229,129 +772,64 @@ export default function StudentDashboard() {
 
             <div ref={messagesEndRef} />
           </div>
+        </div>
 
-          {/* Quick suggestions during conversation */}
-          {messages.length > 0 && sampleQuestions.length > 0 && (
-            <div className="quick-suggestions-row">
-              <span className="quick-suggestions-label">Explore next:</span>
-              <div className="quick-suggestions-scroll">
-                {sampleQuestions.slice(0, 4).map((sq, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="quick-suggestion-chip"
-                    onClick={() => handleSelectSample(sq)}
-                  >
-                    {sq.question}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Chat Input Bar */}
-          <div className="chat-input-area">
+        {/* Composer area */}
+        <div className="shrink-0 bg-linear-to-t from-ink via-ink to-transparent px-3 pt-2 pb-3 sm:px-6 sm:pb-5">
+          <div className="mx-auto w-full max-w-5xl xl:max-w-6xl">
             {/* 3-Query Session Progress Indicator */}
             {queryCount > 0 && queryCount < 3 && quizMode === null && (
-              <div className="session-progress-bar" title={`Query ${queryCount} of 3 in this learning session`}>
-                <span className="session-progress-label">
+              <div
+                className="mb-2.5 flex items-center gap-3 rounded-xl border border-accent/20 bg-accent-soft px-3.5 py-1.5 text-xs text-dim shadow-2xs"
+                title={`Query ${queryCount} of 3 in this learning session`}
+              >
+                <span className="font-semibold text-accent-strong shrink-0">
                   Session: {queryCount}/3 queries
                   {queryCount === 1 ? ' — 2 more for your quiz' : ' — 1 more for your quiz'}
                 </span>
-                <div className="session-progress-track">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised border border-line">
                   <div
-                    className="session-progress-fill"
+                    className="h-full bg-accent transition-all duration-300"
                     style={{ width: `${(queryCount / 3) * 100}%` }}
                   />
                 </div>
               </div>
             )}
-            <form className="composer" onSubmit={sendMessage}>
-              {/* Controls live in a compact toolbar above the prompt */}
-              <div className="composer-toolbar">
-                <DropupSelect
-                  value={level}
-                  label={currentLevelLabel}
-                  options={levelOptions}
-                  onChange={setLevel}
-                  disabled={loading}
-                  ariaLabel="Level selection"
-                  minWidth={150}
-                />
 
-                <DropupSelect
-                  value={isCustomModel ? 'custom_local' : `${provider}:${model}`}
-                  label={currentModelLabel}
-                  options={modelOptions}
-                  onChange={handleModelChange}
-                  disabled={loading}
-                  ariaLabel="Model selection"
-                  minWidth={250}
-                />
-
-                {isCustomModel && ollamaOnline && (
-                  <input
-                    type="text"
-                    className="chat-custom-model-input"
-                    placeholder="e.g. mistral, deepseek-r1:7b"
-                    value={customModelInput}
-                    onChange={(e) => setCustomModelInput(e.target.value)}
-                    disabled={loading}
-                    title="Enter any model name installed in your local Ollama"
-                  />
-                )}
-
-                <DropupSelect
-                  value={imageMode}
-                  label={currentDiagramLabel}
-                  options={diagramOptions}
-                  onChange={setImageMode}
-                  disabled={loading}
-                  ariaLabel="Diagrams mode"
-                  minWidth={220}
-                />
-              </div>
-
-              {/* Clean, full-width prompt */}
-              <div className="composer-input-row">
-                <input
-                  type="text"
-                  className="chat-input"
-                  placeholder={`Ask a question about ${selectedSubject.name}...`}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  disabled={loading}
-                />
-
-                <button
-                  type="submit"
-                  className="chat-send"
-                  disabled={loading || !input.trim()}
-                >
-                  Send
-                </button>
-              </div>
-            </form>
-          </div>
-
-        </div>
-      </main>
-
-      {/* Lightbox Modal */}
-      {lightboxImage && (
-        <div className="image-lightbox-overlay" onClick={() => setLightboxImage(null)}>
-          <div className="image-lightbox-content" onClick={e => e.stopPropagation()}>
-            <button className="image-lightbox-close" onClick={() => setLightboxImage(null)}><X size={20} /></button>
-            <img
-              src={`/api${lightboxImage.url}?u=${encodeURIComponent(currentUser.username || 'student')}`}
-              alt={lightboxImage.source === 'document' ? `Diagram from ${lightboxImage.document}` : 'Diagram'}
+            <Composer
+              input={input}
+              setInput={setInput}
+              onSubmit={sendMessage}
+              loading={loading || (quizMode === 'active' && activeQuiz?.compulsory)}
+              placeholder={
+                quizMode === 'active' && activeQuiz?.compulsory
+                  ? 'Compulsory quiz in progress — complete the quiz above to continue chatting...'
+                  : `Ask a question about ${selectedSubject.name}...`
+              }
+              level={level}
+              levelLabel={currentLevelLabel}
+              levelOptions={levelOptions}
+              onLevelChange={setLevel}
+              modelValue={isCustomModel ? 'custom_local' : `${provider}:${model}`}
+              modelLabel={currentModelLabel}
+              modelOptions={modelOptions}
+              onModelChange={handleModelChange}
+              showCustomModel={isCustomModel && ollamaOnline}
+              customModelInput={customModelInput}
+              setCustomModelInput={setCustomModelInput}
+              imageMode={imageMode}
+              diagramLabel={currentDiagramLabel}
+              diagramOptions={diagramOptions}
+              onDiagramChange={setImageMode}
             />
-            <div className="image-lightbox-meta">
-              <span>From: {lightboxImage.document} (Page {lightboxImage.page + 1})</span>
-            </div>
+            <p className="mt-2 hidden text-center text-[11px] text-mute sm:block">
+              Answers are grounded in {selectedSubject.code} course documents. Verify important details with your sources.
+            </p>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+
+      <Lightbox image={lightboxImage} username={currentUser.username} onClose={() => setLightboxImage(null)} />
+    </AppShell>
   )
 }

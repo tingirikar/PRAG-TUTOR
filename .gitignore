@@ -1,45 +1,6 @@
-# Python virtual environments
-.venv/
-venv/
-ENV/
-
-# Python cache and test output
-__pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Local API keys and secrets
-.env
-.env.*
-!.env.example
-keys
-
-# Node dependencies and logs
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
-
-# Frontend build output
+__pycache__/
 dist/
-dist-ssr/
-*.local
-
-# Runtime uploads (PDFs, extracted images, metadata)
-backend/uploads/
-backend/prerequisites
-
-# Logs and local tooling
-*.log
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
-# Agent / AI config
-.agents/
-
-*pem
+uploads/
+_nosync/
+.env

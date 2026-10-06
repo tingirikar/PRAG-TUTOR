@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Check, ArrowRight, ArrowLeft, AlertCircle, Sparkles, Loader2 } from 'lucide-react'
+import { apiFetch } from '../../api'
 
 export default function Quiz({
   questions = [],
@@ -46,7 +47,6 @@ export default function Quiz({
   const handleSubmitQuiz = async () => {
     if (submitting) return
 
-    // Ensure the current question has an answer
     if (!selectedOption) {
       setError('Please select an option before submitting.')
       return
@@ -64,7 +64,7 @@ export default function Quiz({
 
       console.log(`[QUIZ SUBMIT] Submitting ${answersPayload.length} answers for ${totalQuestions} questions`)
 
-      const res = await fetch('/api/quiz/submit', {
+      const res = await apiFetch('/api/quiz/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,8 +98,8 @@ export default function Quiz({
 
   if (!questions || questions.length === 0) {
     return (
-      <div className="quiz-card">
-        <p className="quiz-desc">No questions available for this quiz.</p>
+      <div className="quiz-card w-full max-w-2xl rounded-2xl border border-line bg-panel p-6 shadow-xs">
+        <p className="text-sm text-dim">No questions available for this quiz.</p>
       </div>
     )
   }
@@ -107,14 +107,27 @@ export default function Quiz({
   const optionLetters = ['A', 'B', 'C', 'D']
 
   return (
-    <div className={`quiz-card ${compulsory ? 'quiz-card-compulsory' : ''}`} id="active-quiz-container">
-      <div className="quiz-card-header">
+    <div
+      className={`quiz-card w-full max-w-2xl rounded-2xl border p-6 shadow-xs animate-rise transition ${
+        compulsory
+          ? 'quiz-card-compulsory border-warn/40 bg-warn/5'
+          : 'border-line bg-panel'
+      }`}
+      id="active-quiz-container"
+    >
+      <div className="quiz-card-header flex items-center justify-between gap-3 mb-5">
         <div className="quiz-badge-wrap">
-          <span className={`badge-chip ${compulsory ? 'badge-prereq' : 'badge-topic'}`}>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+              compulsory
+                ? 'badge-prereq border-warn/30 bg-warn/10 text-warn'
+                : 'badge-topic border-accent/20 bg-accent-soft text-accent-strong'
+            }`}
+          >
             {compulsory ? (
-              <AlertCircle size={14} className="badge-icon" />
+              <AlertCircle size={13} className="text-warn shrink-0" />
             ) : (
-              <Sparkles size={14} className="badge-icon" />
+              <Sparkles size={13} className="text-accent shrink-0" />
             )}
             <span className="badge-label">
               {compulsory ? 'Compulsory Knowledge Check' : 'Concept Check'} — Question {currentIndex + 1} of {totalQuestions}
@@ -122,18 +135,20 @@ export default function Quiz({
           </span>
         </div>
 
-        <div className="quiz-progress-track" title={`Question ${currentIndex + 1} of ${totalQuestions}`}>
+        <div className="quiz-progress-track h-2 w-32 rounded-full bg-raised overflow-hidden border border-line" title={`Question ${currentIndex + 1} of ${totalQuestions}`}>
           <div
-            className="quiz-progress-fill"
+            className="quiz-progress-fill h-full bg-accent transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
       </div>
 
-      <div className="quiz-question-container">
-        <h4 className="quiz-question-text" id="quiz-question-text">{currentQ?.question}</h4>
+      <div className="quiz-question-container mb-6">
+        <h4 className="quiz-question-text text-base font-semibold leading-snug text-fg mb-4" id="quiz-question-text">
+          {currentQ?.question}
+        </h4>
 
-        <div className="quiz-options-list" role="radiogroup">
+        <div className="quiz-options-list flex flex-col gap-2.5" role="radiogroup">
           {(currentQ?.options || []).map((opt, oIdx) => {
             const isSelected = selectedOption === opt
             const letter = optionLetters[oIdx] || String(oIdx + 1)
@@ -142,51 +157,62 @@ export default function Quiz({
               <button
                 key={oIdx}
                 type="button"
-                className={`quiz-option-btn ${isSelected ? 'selected' : ''}`}
+                className={`quiz-option-btn group flex w-full items-center gap-3.5 rounded-xl border p-3.5 text-left text-sm transition ${
+                  isSelected
+                    ? 'selected border-accent bg-accent-soft text-accent-strong font-medium shadow-2xs'
+                    : 'border-line bg-raised text-fg hover:border-line-strong hover:bg-hover'
+                }`}
                 onClick={() => handleSelectOption(opt)}
                 disabled={submitting}
                 role="radio"
                 aria-checked={isSelected}
                 id={`quiz-opt-${oIdx}`}
               >
-                <span className="quiz-option-letter">
-                  {isSelected ? <Check size={14} /> : letter}
+                <span
+                  className={`quiz-option-letter flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-bold transition ${
+                    isSelected
+                      ? 'border-accent bg-accent text-white'
+                      : 'border-line bg-panel text-mute group-hover:text-fg'
+                  }`}
+                >
+                  {isSelected ? <Check size={13} /> : letter}
                 </span>
-                <span className="quiz-option-text">{opt}</span>
+                <span className="quiz-option-text flex-1 leading-snug">{opt}</span>
               </button>
             )
           })}
         </div>
       </div>
 
-      {error && <div className="quiz-error-msg">{error}</div>}
+      {error && (
+        <div className="quiz-error-msg mb-4 rounded-xl border border-danger/20 bg-danger/10 px-3.5 py-2 text-xs text-danger">
+          {error}
+        </div>
+      )}
 
-      <div className="quiz-actions-row">
-        {/* Previous Navigation Button */}
+      <div className="quiz-actions-row flex items-center gap-3 pt-2">
         <button
           type="button"
-          className="quiz-btn-secondary"
+          className="quiz-btn-secondary inline-flex items-center gap-2 rounded-xl border border-line bg-raised px-4 py-2 text-sm font-medium text-dim transition hover:bg-hover hover:text-fg disabled:opacity-40"
           onClick={handlePrevious}
           disabled={isFirstQuestion || submitting}
           id="quiz-prev-btn"
-          style={{ opacity: isFirstQuestion ? 0.4 : 1 }}
         >
           <ArrowLeft size={15} />
           <span>Previous</span>
         </button>
 
-        {/* Next / Submit Navigation Button */}
         {isLastQuestion ? (
           <button
             type="button"
-            className="quiz-btn-primary"
+            className="quiz-btn-primary inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-xs transition hover:bg-accent-strong disabled:opacity-50"
             onClick={handleSubmitQuiz}
             disabled={submitting || !selectedOption}
             id="quiz-submit-btn"
           >
             {submitting ? (
               <>
-                <Loader2 size={15} className="thinking-spinner" />
+                <Loader2 size={15} className="animate-spin" />
                 <span>Scoring Quiz...</span>
               </>
             ) : (
@@ -199,7 +225,7 @@ export default function Quiz({
         ) : (
           <button
             type="button"
-            className="quiz-btn-primary"
+            className="quiz-btn-primary inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-xs transition hover:bg-accent-strong disabled:opacity-50"
             onClick={handleNext}
             disabled={submitting || !selectedOption}
             id="quiz-next-btn"
@@ -209,7 +235,7 @@ export default function Quiz({
           </button>
         )}
 
-        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+        <span className="ml-auto text-xs font-mono text-mute">
           Question {currentIndex + 1} of {totalQuestions}
         </span>
       </div>
