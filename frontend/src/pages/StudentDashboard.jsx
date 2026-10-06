@@ -12,6 +12,9 @@ import MessageBubble from '../components/chat/MessageBubble'
 import ThinkingPanel from '../components/chat/ThinkingPanel'
 import Composer from '../components/chat/Composer'
 import Lightbox from '../components/chat/Lightbox'
+import Quiz from '../components/Quiz/Quiz'
+import QuizInvite from '../components/Quiz/QuizInvite'
+import QuizResult from '../components/Quiz/QuizResult'
 import { apiFetch } from '../api'
 import { ArrowUpRight, LayoutGrid, RefreshCw } from 'lucide-react'
 
@@ -87,6 +90,12 @@ export default function StudentDashboard() {
   const [thinkingOpen, setThinkingOpen] = useState(false)
   const [thinkingSteps, setThinkingSteps] = useState([])
 
+  // Quiz flow state
+  const [quizMode, setQuizMode] = useState(null) // null | 'invite' | 'active' | 'result'
+  const [activeQuiz, setActiveQuiz] = useState(null)
+  const [quizResult, setQuizResult] = useState(null)
+  const [queryCount, setQueryCount] = useState(0)
+
   const [ollamaOnline, setOllamaOnline] = useState(false)
 
   // Load subjects & available models on mount
@@ -151,6 +160,10 @@ export default function StudentDashboard() {
     setMessages([])
     setInput('')
     setImageMode('none')
+    setQuizMode(null)
+    setActiveQuiz(null)
+    setQuizResult(null)
+    setQueryCount(0)
     fetchSampleQuestions(subj.code)
     fetchConversations(subj.code)
   }
@@ -161,6 +174,10 @@ export default function StudentDashboard() {
     setCurrentConversationId(null)
     setMessages([])
     setInput('')
+    setQuizMode(null)
+    setActiveQuiz(null)
+    setQuizResult(null)
+    setQueryCount(0)
   }
 
   // Load a saved conversation from MongoDB
@@ -168,12 +185,30 @@ export default function StudentDashboard() {
     if (loading || convId === currentConversationId) return
     try {
       setLoading(true)
+      setQuizMode(null)
+      setActiveQuiz(null)
+      setQuizResult(null)
+      setQueryCount(0)
       const res = await apiFetch(`/api/conversations/${convId}?studentUsername=${encodeURIComponent(currentUser.username || 'student')}`)
       const data = await res.json()
       if (data.conversation) {
         setCurrentConversationId(convId)
         setMessages(data.conversation.messages || [])
         setExpandedSources({})
+        setQueryCount(data.conversation.query_count || 0)
+
+        const quizStatus = data.conversation.quiz_status
+        if (quizStatus?.available && quizStatus.questions?.length > 0) {
+          setActiveQuiz({
+            quizSetId: null,
+            quizSetIds: quizStatus.quizSetIds || [],
+            questions: quizStatus.questions,
+            total: quizStatus.total || quizStatus.questions.length,
+            compulsory: true,
+            conversationId: convId,
+          })
+          setQuizMode('active')
+        }
       }
     } catch (err) {
       console.error('Failed to load conversation:', err)
@@ -210,13 +245,17 @@ export default function StudentDashboard() {
     setExpandedSources({})
     setInput('')
     setImageMode('none')
+    setQuizMode(null)
+    setActiveQuiz(null)
+    setQuizResult(null)
+    setQueryCount(0)
   }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  useEffect(scrollToBottom, [messages, loading])
+  useEffect(scrollToBottom, [messages, loading, quizMode])
 
   // Thinking progress simulation
   useEffect(() => {
@@ -260,6 +299,10 @@ export default function StudentDashboard() {
   const handleAsk = async (queryText, chosenLevel = level, topicHint = null) => {
     const query = queryText.trim()
     if (!query || loading || !selectedSubject) return
+
+    setQuizMode(null)
+    setActiveQuiz(null)
+    setQuizResult(null)
 
     const activeModelName = isCustomModel ? (customModelInput.trim() || 'llama3.2:3b') : model
 
@@ -351,6 +394,36 @@ export default function StudentDashboard() {
       ])
 
       setLoading(false)
+
+      if (typeof data.query_count === 'number') {
+        setQueryCount(data.query_count)
+      }
+
+      // Handle quiz generation response:
+      if (data.quiz?.compulsory && data.quiz.questions?.length > 0) {
+        setActiveQuiz({
+          quizSetId: data.quiz.quizSetId,
+          quizSetIds: data.quiz.quizSetIds || [],
+          questions: data.quiz.questions,
+          total: data.quiz.total || data.quiz.questions.length,
+          compulsory: true,
+          conversationId: data.conversationId || currentConversationId,
+        })
+        setQuizMode('active')
+      } else if (data.quiz?.available && data.quiz.quizSetId) {
+        setActiveQuiz({
+          quizSetId: data.quiz.quizSetId,
+          quizSetIds: data.quiz.quizSetIds || [],
+          questions: [],
+          total: data.quiz.total || 3,
+          compulsory: false,
+          conversationId: data.conversationId || currentConversationId,
+        })
+        setQuizMode('invite')
+      } else {
+        setQuizMode(null)
+        setActiveQuiz(null)
+      }
 
       if (imageMode === 'notes' && !data.rejected) {
         apiFetch('/api/query/images', {
@@ -640,6 +713,58 @@ export default function StudentDashboard() {
               />
             )}
 
+            {/* Quiz UI Flow */}
+            {quizMode === 'invite' && activeQuiz && (
+              <QuizInvite
+                quizSetId={activeQuiz.quizSetId}
+                conversationId={activeQuiz.conversationId || currentConversationId}
+                studentUsername={currentUser.username || 'student'}
+                subject={selectedSubject.code}
+                total={activeQuiz.total || 3}
+                onYes={(quizData) => {
+                  setActiveQuiz(prev => ({ ...prev, ...quizData }))
+                  setQuizMode('active')
+                }}
+                onNo={() => {
+                  setQuizMode(null)
+                  setActiveQuiz(null)
+                }}
+              />
+            )}
+
+            {quizMode === 'active' && activeQuiz && (
+              <Quiz
+                questions={activeQuiz.questions}
+                quizSetIds={activeQuiz.quizSetIds}
+                conversationId={activeQuiz.conversationId || currentConversationId}
+                studentUsername={currentUser.username || 'student'}
+                subject={selectedSubject.code}
+                compulsory={activeQuiz.compulsory}
+                onComplete={(score, total) => {
+                  setQuizResult({ score, total })
+                  setQuizMode('result')
+                  if (selectedSubject?.code) {
+                    fetchConversations(selectedSubject.code)
+                  }
+                }}
+              />
+            )}
+
+            {quizMode === 'result' && quizResult && (
+              <QuizResult
+                score={quizResult.score}
+                total={quizResult.total}
+                onBack={() => {
+                  setQuizMode(null)
+                  setActiveQuiz(null)
+                  setQuizResult(null)
+                  if (selectedSubject?.code) {
+                    fetchConversations(selectedSubject.code)
+                  }
+                }}
+              />
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         </div>
@@ -647,12 +772,35 @@ export default function StudentDashboard() {
         {/* Composer area */}
         <div className="shrink-0 bg-linear-to-t from-ink via-ink to-transparent px-3 pt-2 pb-3 sm:px-6 sm:pb-5">
           <div className="mx-auto w-full max-w-5xl xl:max-w-6xl">
+            {/* 3-Query Session Progress Indicator */}
+            {queryCount > 0 && queryCount < 3 && quizMode === null && (
+              <div
+                className="mb-2.5 flex items-center gap-3 rounded-xl border border-accent/20 bg-accent-soft px-3.5 py-1.5 text-xs text-dim shadow-2xs"
+                title={`Query ${queryCount} of 3 in this learning session`}
+              >
+                <span className="font-semibold text-accent-strong shrink-0">
+                  Session: {queryCount}/3 queries
+                  {queryCount === 1 ? ' — 2 more for your quiz' : ' — 1 more for your quiz'}
+                </span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised border border-line">
+                  <div
+                    className="h-full bg-accent transition-all duration-300"
+                    style={{ width: `${(queryCount / 3) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <Composer
               input={input}
               setInput={setInput}
               onSubmit={sendMessage}
-              loading={loading}
-              placeholder={`Ask a question about ${selectedSubject.name}...`}
+              loading={loading || (quizMode === 'active' && activeQuiz?.compulsory)}
+              placeholder={
+                quizMode === 'active' && activeQuiz?.compulsory
+                  ? 'Compulsory quiz in progress — complete the quiz above to continue chatting...'
+                  : `Ask a question about ${selectedSubject.name}...`
+              }
               level={level}
               levelLabel={currentLevelLabel}
               levelOptions={levelOptions}

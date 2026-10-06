@@ -13,6 +13,7 @@ import conversationRoutes from './routes/conversationRoutes.js'
 import prerequisiteRoutes from './routes/prerequisiteRoutes.js'
 import queryRoutes from './routes/queryRoutes.js'
 import documentRoutes from './routes/documentRoutes.js'
+import quizRoutes from './routes/quizRoutes.js'
 
 // 1. Load environment variables (.env)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -47,6 +48,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/subjects', subjectRoutes)
 app.use('/api/conversations', conversationRoutes)
 app.use('/api/prerequisites', prerequisiteRoutes)
+app.use('/api/quiz', quizRoutes)
 app.use('/api', queryRoutes)
 app.use('/api', documentRoutes)
 

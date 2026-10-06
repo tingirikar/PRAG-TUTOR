@@ -3,6 +3,33 @@ import Conversation from '../models/Conversation.js'
 import { isMongoReady } from '../config/db.js'
 import { callPython } from '../services/pythonService.js'
 import { isValidObjectId } from '../middleware/validation.js'
+import { createQuizSet, getConversationQuizStatus } from '../services/quizService.js'
+
+function isGenuineExplanation(result) {
+  if (!result || typeof result !== 'object') return false
+  if (result.error) return false
+  const text = String(result.response || result.answer || '').trim()
+  if (!text || text.length < 50) return false
+
+  const fallbackIndicators = [
+    'could not complete the tutor response',
+    'no course documents have been uploaded',
+    'no course documents for',
+    'not covered in the available course material',
+    'cannot answer this question based on the course materials',
+    'sorry, but no course documents',
+    'do not have access to',
+    'please upload course documents',
+    'fallback',
+  ]
+
+  const lower = text.toLowerCase()
+  for (const phrase of fallbackIndicators) {
+    if (lower.includes(phrase)) return false
+  }
+
+  return true
+}
 
 export async function handleQuery(request, response) {
   const query = String(request.body?.query || request.body?.question || '').trim()
@@ -48,10 +75,16 @@ export async function handleQuery(request, response) {
           studentUsername,
           subject,
           title,
-          messages: []
+          messages: [],
+          query_count: 0,
+          queries: [],
+          quiz_completed: false,
         })
         conversationId = conversation._id.toString()
       }
+
+      const currentQueryNumber = (conversation.query_count || 0) + 1
+      const queryId = randomUUID()
 
       const userMsg = {
         id: randomUUID(),
@@ -77,11 +110,88 @@ export async function handleQuery(request, response) {
       }
 
       conversation.messages.push(userMsg, assistantMsg)
+      conversation.query_count = currentQueryNumber
+
+      // 3. Generate exactly 3 MCQs ONLY for a genuine successful tutor explanation
+      let currentQuizSet = null
+      const explanation = result.response || result.answer || ''
+      const isGenuine = isGenuineExplanation(result)
+
+      if (isGenuine) {
+        try {
+          currentQuizSet = await createQuizSet({
+            studentUsername,
+            subject,
+            conversationId,
+            query,
+            explanation,
+          })
+        } catch (quizError) {
+          console.warn('[QUIZ ERROR] Generation failed:', quizError.message)
+        }
+      } else {
+        console.log('[QUIZ SKIPPED] Non-genuine or fallback RAG response — no QuizSet created')
+      }
+
+      // Add conceptual query record to the conversation
+      if (!conversation.queries) conversation.queries = []
+      conversation.queries.push({
+        query_id: queryId,
+        conversation_id: conversationId,
+        query_number: currentQueryNumber,
+        query_text: query,
+        response: explanation,
+        quiz_questions: currentQuizSet ? currentQuizSet.questions : [],
+        createdAt: new Date(),
+      })
+
       conversation.updatedAt = new Date()
       await conversation.save()
+
+      // 4. Authoritative quiz presentation trigger check:
+      let quiz = {
+        available: false,
+        compulsory: false,
+        conversationId,
+        quizSetId: null,
+        quizSetIds: [],
+        questions: [],
+        total: 0,
+        query_count: conversation.query_count,
+      }
+
+      if (isGenuine && currentQuizSet) {
+        const quizStatus = await getConversationQuizStatus(studentUsername, subject, currentQuizSet)
+        quiz = {
+          available: quizStatus.compulsory || Boolean(currentQuizSet),
+          compulsory: quizStatus.compulsory,
+          conversationId,
+          quizSetId: currentQuizSet._id.toString(),
+          quizSetIds: quizStatus.quizSetIds,
+          questions: quizStatus.questions,
+          total: quizStatus.total,
+          query_count: conversation.query_count,
+        }
+      }
+
+      return response.json({
+        ...result,
+        conversationId,
+        conversationPersistence,
+        query_count: conversation.query_count,
+        query_id: queryId,
+        query_number: currentQueryNumber,
+        quiz,
+      })
     }
 
-    return response.json({ ...result, conversationId, conversationPersistence })
+    return response.json({
+      ...result,
+      conversationId,
+      conversationPersistence,
+      query_count: 1,
+      quiz: { available: false, compulsory: false }
+    })
   } catch (error) {
     response.status(error.status || 503).json({ error: error.message })
   }
