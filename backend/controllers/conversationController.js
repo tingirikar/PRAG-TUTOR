@@ -1,4 +1,6 @@
 import Conversation from '../models/Conversation.js'
+import QuizState from '../models/QuizState.js'
+import { getConversationQuizStatus } from '../services/quizService.js'
 import { isMongoReady } from '../config/db.js'
 import { isValidObjectId } from '../middleware/validation.js'
 
@@ -61,7 +63,32 @@ export async function getConversationById(request, response) {
       return response.status(404).json({ error: 'Conversation not found.' })
     }
 
-    return response.json({ conversation })
+    const state = await QuizState.findOne({
+      studentUsername: conversation.studentUsername,
+      subject: conversation.subject,
+    }).lean()
+
+    const quizStatus = await getConversationQuizStatus(
+      conversation.studentUsername,
+      conversation.subject
+    )
+
+    return response.json({
+      conversation: {
+        ...conversation,
+        query_count: conversation.query_count || 0,
+        skip_count: state?.skipCount || 0,
+        quiz_required: quizStatus.quizRequired,
+        quiz_status: {
+          available: quizStatus.quizRequired,
+          compulsory: quizStatus.compulsory,
+          questions: quizStatus.questions,
+          quizSetIds: quizStatus.quizSetIds,
+          total: quizStatus.total,
+          query_count: conversation.query_count || 0,
+        },
+      }
+    })
   }
   catch (err) {
     return response.status(500).json({ error: err.message })

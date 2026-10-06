@@ -20,11 +20,24 @@ const messageSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 })
 
+const querySchema = new mongoose.Schema({
+  query_id: { type: String, default: () => randomUUID() },
+  conversation_id: { type: String, required: true },
+  query_number: { type: Number, required: true },
+  query_text: { type: String, required: true },
+  response: { type: String, default: '' },
+  quiz_questions: { type: [mongoose.Schema.Types.Mixed], default: [] },
+  createdAt: { type: Date, default: Date.now },
+})
+
 const conversationSchema = new mongoose.Schema({
   studentUsername: { type: String, required: true, index: true },
   subject: { type: String, required: true, index: true },
   title: { type: String, required: true },
   messages: [messageSchema],
+  query_count: { type: Number, default: 0 },
+  queries: [querySchema],
+  quiz_completed: { type: Boolean, default: false },
 }, { timestamps: true })
 
 const Conversation = mongoose.models.Conversation || mongoose.model('Conversation', conversationSchema)
